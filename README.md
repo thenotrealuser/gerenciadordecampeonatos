@@ -10,3 +10,6 @@ Para baixar compilado, basta clicar em latest, baixar o main.exe e executar.
 Não apague o arquivo .db gerado pelo aplicativo, fazer isto fará perder todos dados cadastrados a menos claro, que você queira zerar as informações.
 
 Alguns bugs podem estar presentes, quando eu estiver disposto posso corrigir ou faça isso você mesmo fazendo um FORK do projeto ou me mandando o .py após testar!
+
+![image](https://github.com/user-attachments/assets/506da39f-61a2-4951-8fe9-4419767a928a)
+
