@@ -1,7 +1,6 @@
 from tkinter import messagebox
 import customtkinter as ctk
-from cadastro_pilotos_categorias import CadastroCategoriasFrame
-from cadastro_pilotos_categorias import CadastroPilotosFrame
+from cadastro_pilotos_categorias import CadastroCategoriasFrame, CadastroPilotosFrame
 from cadastro_equipes import CadastroTimesFrame
 from cadastro_etapas import CadastroEtapasFrame
 from frame_resultado_etapas import ResultadosEtapasFrame
@@ -10,9 +9,7 @@ from sorteio_karts import SorteioKartsFrame
 from importar_pilotos import ImportarPilotosFrame
 from sistema_pontuacao import SistemaPontuacaoFrame
 from historico_sorteios import HistoricoSorteiosFrame
-from database import cursor, conn
-from database import verificar_estrutura_banco
-from database import setup_database
+from database import cursor, conn, verificar_estrutura_banco, setup_database
 
 # Garantir que o banco de dados esteja configurado
 setup_database()
@@ -21,12 +18,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Sistema de gerenciamento de campeonato de karts by :::Kimi Morgam::: Tela principal")
-        # Remove fixed geometry
-        # self.geometry("1400x800")
-
-        # Maximize the window (optional)
-        # self.state('zoomed')  # For Windows
-        # For Linux, use: self.attributes('-zoomed', True)
+        self.state('zoomed')  # Maximiza a janela no Windows
 
         # Layout Principal: Frame da Esquerda (Menu) e Frame da Direita (Conteúdo)
         self.grid_columnconfigure(1, weight=1)
@@ -38,44 +30,30 @@ class App(ctk.CTk):
         self.menu_frame.grid_rowconfigure(11, weight=1)
 
         # Botões do Menu
-        self.btn_cadastro_categorias = ctk.CTkButton(self.menu_frame, text="Cadastro de Categorias", command=self.show_cadastro_categorias)
-        self.btn_cadastro_categorias.grid(row=0, column=0, padx=20, pady=10)
+        buttons = [
+            ("Cadastro de Categorias", self.show_cadastro_categorias),
+            ("Cadastro de Pilotos", self.show_cadastro_pilotos),
+            ("Cadastro de Times", self.show_cadastro_times),
+            ("Cadastro de Etapas", self.show_cadastro_etapas),
+            ("Resultados das Etapas", self.show_resultados_etapas),
+            ("Resultado Geral", self.show_resultado_geral),
+            ("Sorteio de Karts", self.show_sorteio_karts),
+            ("Importar Pilotos", self.show_importar_pilotos),
+            ("Sistema de Pontuação", self.show_sistema_pontuacao),
+            ("Histórico de Sorteios", self.show_historico_sorteios),
+            ("Resetar Campeonato", self.resetar_campeonato, "red", "darkred")
+        ]
 
-        self.btn_cadastro_pilotos = ctk.CTkButton(self.menu_frame, text="Cadastro de Pilotos", command=self.show_cadastro_pilotos)
-        self.btn_cadastro_pilotos.grid(row=1, column=0, padx=20, pady=10)
-
-        self.btn_cadastro_times = ctk.CTkButton(self.menu_frame, text="Cadastro de Times", command=self.show_cadastro_times)
-        self.btn_cadastro_times.grid(row=2, column=0, padx=20, pady=10)
-
-        self.btn_cadastro_etapas = ctk.CTkButton(self.menu_frame, text="Cadastro de Etapas", command=self.show_cadastro_etapas)
-        self.btn_cadastro_etapas.grid(row=3, column=0, padx=20, pady=10)
-
-        self.btn_resultados_etapas = ctk.CTkButton(self.menu_frame, text="Resultados das Etapas", command=self.show_resultados_etapas)
-        self.btn_resultados_etapas.grid(row=4, column=0, padx=20, pady=10)
-
-        self.btn_resultado_geral = ctk.CTkButton(self.menu_frame, text="Resultado Geral", command=self.show_resultado_geral)
-        self.btn_resultado_geral.grid(row=5, column=0, padx=20, pady=10)
-
-        self.btn_sorteio_karts = ctk.CTkButton(self.menu_frame, text="Sorteio de Karts", command=self.show_sorteio_karts)
-        self.btn_sorteio_karts.grid(row=6, column=0, padx=20, pady=10)
-
-        self.btn_importar_pilotos = ctk.CTkButton(self.menu_frame, text="Importar Pilotos", command=self.show_importar_pilotos)
-        self.btn_importar_pilotos.grid(row=7, column=0, padx=20, pady=10)
-
-        self.btn_sistema_pontuacao = ctk.CTkButton(self.menu_frame, text="Sistema de Pontuação", command=self.show_sistema_pontuacao)
-        self.btn_sistema_pontuacao.grid(row=8, column=0, padx=20, pady=10)
-
-        self.btn_historico_sorteios = ctk.CTkButton(self.menu_frame, text="Histórico de Sorteios", command=self.show_historico_sorteios)
-        self.btn_historico_sorteios.grid(row=9, column=0, padx=20, pady=10)
-
-        self.btn_resetar_campeonato = ctk.CTkButton(self.menu_frame, text="Resetar Campeonato", fg_color="red", hover_color="darkred", command=self.resetar_campeonato)
-        self.btn_resetar_campeonato.grid(row=10, column=0, padx=20, pady=10)
+        for i, button in enumerate(buttons):
+            text, command = button[:2]
+            fg_color = button[2] if len(button) > 2 else None
+            hover_color = button[3] if len(button) > 3 else None
+            btn = ctk.CTkButton(self.menu_frame, text=text, command=command, fg_color=fg_color, hover_color=hover_color)
+            btn.grid(row=i, column=0, padx=20, pady=10, sticky="ew")
 
         # Frame de Conteúdo
         self.content_frame = ctk.CTkFrame(self, corner_radius=0)
         self.content_frame.grid(row=0, column=1, sticky="nsew")
-
-        # Configure content_frame to expand
         self.content_frame.grid_rowconfigure(0, weight=1)
         self.content_frame.grid_columnconfigure(0, weight=1)
 
@@ -86,12 +64,10 @@ class App(ctk.CTk):
         # Inicialmente, mostrar o cadastro de categorias
         self.show_cadastro_categorias()
 
-    # Função para limpar o conteúdo atual
     def clear_content(self):
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
-    # Funções para cada ação
     def show_cadastro_categorias(self):
         self.clear_content()
         frame = CadastroCategoriasFrame(self.scrollable_frame)
@@ -142,7 +118,6 @@ class App(ctk.CTk):
         frame = HistoricoSorteiosFrame(self.scrollable_frame)
         frame.pack(fill="both", expand=True)
 
-    # Função para resetar o campeonato
     def resetar_campeonato(self):
         ResetarCampeonatoWindow(self)
 
@@ -175,6 +150,7 @@ class ResetarCampeonatoWindow(ctk.CTkToplevel):
             cursor.execute("DELETE FROM sistema_pontuacao_extras")
             cursor.execute("DELETE FROM historico_sorteios")
             conn.commit()
+
             self.destroy()
             messagebox.showinfo("Campeonato Resetado", "O campeonato foi resetado com sucesso.")
         except Exception as e:
