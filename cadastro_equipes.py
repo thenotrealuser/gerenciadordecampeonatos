@@ -2,6 +2,7 @@ from tkinter import ttk, messagebox
 
 import customtkinter as ctk
 from database import cursor, conn
+from db_utils import buscar_times
 from tkinter import simpledialog
 
 
@@ -75,8 +76,8 @@ class CadastroTimesFrame(ctk.CTkFrame):
             self.tree.delete(item)
 
         # Buscar times cadastrados
-        cursor.execute("SELECT nome FROM times ORDER BY nome")
-        times = cursor.fetchall()
+        times = buscar_times()
+        times = [(time[1],) for time in times]
 
         # Inserir times na Treeview
         for time in times:

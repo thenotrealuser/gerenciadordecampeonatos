@@ -3,6 +3,7 @@ from tkinter import messagebox, StringVar, ttk, simpledialog, END
 from tkinter import Listbox
 import customtkinter as ctk
 from database import cursor, conn
+from db_utils import buscar_categorias, buscar_times
 import sqlite3
 
 # Certifique-se de que as tabelas 'times' e 'pilotos_times' existam no banco de dados.
@@ -205,14 +206,10 @@ class CadastroPilotosFrame(ctk.CTkFrame):
         self.btn_unir_pilotos.pack(pady=10)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
+        return buscar_times()
 
     def carregar_pilotos(self):
         # Limpar a Treeview
@@ -713,14 +710,10 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         self.btn_salvar.pack(pady=20)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
+        return buscar_times()
 
     def salvar_piloto(self):
         nome = self.entry_nome.get().strip()
@@ -971,14 +964,10 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         self.btn_salvar.pack(pady=20)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
+        return buscar_times()
 
     def salvar_piloto(self):
         nome = self.entry_nome.get().strip()

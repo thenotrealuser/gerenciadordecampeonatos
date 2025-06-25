@@ -2,6 +2,7 @@ import sqlite3
 
 import customtkinter as ctk
 from database import cursor, conn
+from db_utils import buscar_categorias
 from tkinter import StringVar, messagebox, filedialog
 
 
@@ -33,9 +34,7 @@ class ImportarPilotosFrame(ctk.CTkFrame):
         self.dropdown_categoria.pack(pady=5)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def selecionar_arquivo(self):
         arquivo = filedialog.askopenfilename(title="Selecionar Arquivo",

@@ -1,6 +1,7 @@
 from tkinter import StringVar, ttk, messagebox, filedialog
 import customtkinter as ctk
 from database import cursor, conn
+from db_utils import buscar_categorias
 import csv
 import os
 import PyPDF2
@@ -80,9 +81,7 @@ class ResultadosEtapasFrame(ctk.CTkFrame):
         self.atualizar_etapas()
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def atualizar_etapas(self, event=None):
         categoria_nome = self.categoria_var.get()

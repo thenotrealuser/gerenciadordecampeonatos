@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, Table, TableStyle, SimpleDocTemplate
 from database import cursor, conn
+from db_utils import buscar_categorias
 
 
 class ResultadoGeralFrame(ctk.CTkFrame):
@@ -88,9 +89,7 @@ class ResultadoGeralFrame(ctk.CTkFrame):
         self.atualizar_resultado()
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def aplicar_descarte(self, numero_descartes):
         self.atualizar_resultado(descartar=numero_descartes)

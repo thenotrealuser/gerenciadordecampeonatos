@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from database import cursor, conn
+from db_utils import buscar_categorias
 from tkinter import StringVar
 from tkinter import ttk, messagebox
 import random
@@ -89,9 +90,7 @@ class SorteioKartsFrame(ctk.CTkFrame):
         self.resultado_label.pack(pady=5)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def atualizar_pilotos(self, event=None):
         categoria_nome = self.categoria_var.get()
@@ -377,9 +376,7 @@ class AdicionarPilotoSorteioWindow(ctk.CTkToplevel):
         self.btn_salvar.pack(pady=20)
 
     def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        return buscar_categorias()
 
     def salvar_piloto(self):
         nome = self.entry_nome.get().strip().lower()  # Normaliza o nome para minúsculas
