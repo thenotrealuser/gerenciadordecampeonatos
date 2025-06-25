@@ -153,7 +153,7 @@ class CadastroPilotosFrame(ctk.CTkFrame):
         self.label_categoria = ctk.CTkLabel(self, text="Selecione Categorias")
         self.label_categoria.pack(pady=5)
 
-        self.categorias = self.get_categorias()
+        self.categorias = master.get_categorias()
         if not self.categorias:
             messagebox.showwarning("Aviso", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
 
@@ -667,6 +667,7 @@ class EditarPilotoWindow(ctk.CTkToplevel):
 class AdicionarPilotoManualWindow(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
+        self.master = master
         self.title("Adicionar Piloto Manualmente")
         self.geometry("400x500")
         self.transient(master)  # Sobrepõe a janela principal
@@ -683,7 +684,7 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
         self.label_categoria.pack(pady=10)
 
-        self.categorias = self.get_categorias()
+        self.categorias = master.get_categorias()
         if not self.categorias:
             messagebox.showerror("Erro", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
             self.destroy()
@@ -701,7 +702,7 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
         self.label_time.pack(pady=10)
 
-        self.times = self.get_times()
+        self.times = master.get_times()
         self.time_var = StringVar()
         time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
         self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
@@ -712,15 +713,6 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         self.btn_salvar = ctk.CTkButton(self, text="Salvar Piloto", command=self.salvar_piloto)
         self.btn_salvar.pack(pady=20)
 
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
 
     def salvar_piloto(self):
         nome = self.entry_nome.get().strip()
@@ -781,263 +773,6 @@ class AdicionarPilotoManualWindow(ctk.CTkToplevel):
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao salvar piloto: {e}")
 
-
-class EditarPilotoWindow(ctk.CTkToplevel):
-    def __init__(self, parent, nome_piloto):
-        super().__init__(parent)
-        self.title(f"Editar Piloto - {nome_piloto}")
-        self.geometry("500x600")
-        self.parent = parent
-        self.nome_piloto = nome_piloto
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=10)
-        self.entry_nome.insert(0, nome_piloto)
-
-        # Seleção de Categorias
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione Categorias")
-        self.label_categoria.pack(pady=5)
-
-        self.categorias = parent.get_categorias()
-        self.categoria_vars = []
-        self.categoria_checkboxes = []
-        # Buscar categorias atuais do piloto
-        cursor.execute("""
-            SELECT categoria_id FROM pilotos_categorias 
-            WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)
-            """, (nome_piloto,))
-        categorias_piloto = cursor.fetchall()
-        categorias_piloto_ids = [cat[0] for cat in categorias_piloto]
-
-        for categoria in self.categorias:
-            var = ctk.BooleanVar()
-            if categoria[0] in categorias_piloto_ids:
-                var.set(True)
-            cb = ctk.CTkCheckBox(self, text=categoria[1], variable=var)
-            cb.pack(anchor='w')
-            self.categoria_vars.append((var, categoria[0]))
-            self.categoria_checkboxes.append(cb)
-
-        # Seleção de Time
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = parent.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Carregar o time atual do piloto
-        cursor.execute("SELECT time_id FROM pilotos_times WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)", (nome_piloto,))
-        time_piloto = cursor.fetchone()
-        if time_piloto:
-            time_id = time_piloto[0]
-            cursor.execute("SELECT nome FROM times WHERE id = ?", (time_id,))
-            time_nome = cursor.fetchone()
-            if time_nome:
-                self.dropdown_time.set(time_nome[0])
-        else:
-            self.dropdown_time.set("")  # Deixar vazio se não tiver time
-
-        # Botão para Salvar Alterações
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Alterações", command=self.salvar_alteracoes)
-        self.btn_salvar.pack(pady=20)
-
-    def salvar_alteracoes(self):
-        novo_nome = self.entry_nome.get().strip()
-        if not novo_nome:
-            messagebox.showerror("Erro", "O nome do piloto é obrigatório.")
-            return
-
-        # Capitalizar o nome corretamente
-        novo_nome_capitalizado = self.parent.capitalizar_nome(novo_nome)
-
-        categorias_selecionadas = [cat_id for var, cat_id in self.categoria_vars if var.get()]
-        if not categorias_selecionadas:
-            messagebox.showerror("Erro", "Selecione pelo menos uma categoria.")
-            return
-
-        time_nome = self.time_var.get()
-
-        try:
-            # Verificar se o novo nome já existe (exceto o piloto atual)
-            cursor.execute("SELECT id FROM pilotos WHERE LOWER(nome) = ? AND nome != ?", (novo_nome.lower(), self.nome_piloto))
-            piloto_existente = cursor.fetchone()
-            if piloto_existente:
-                messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
-                return
-
-            # Atualizar o nome do piloto
-            cursor.execute("UPDATE pilotos SET nome = ? WHERE nome = ?", (novo_nome_capitalizado, self.nome_piloto))
-
-            # Atualizar as categorias do piloto
-            piloto_id = self.get_piloto_id(self.nome_piloto)
-            if piloto_id:
-                # Remover todas as categorias atuais
-                cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (piloto_id,))
-                # Adicionar as categorias selecionadas
-                for cat_id in categorias_selecionadas:
-                    cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                                   (piloto_id, cat_id))
-
-            # Atualizar a associação com o time
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
-
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto atualizado com sucesso!")
-            self.parent.carregar_pilotos()  # Atualizar a lista de pilotos na janela principal
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao atualizar piloto: {e}")
-
-    def get_piloto_id(self, nome_piloto):
-        cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_piloto,))
-        piloto = cursor.fetchone()
-        return piloto[0] if piloto else None
-
-
-class AdicionarPilotoManualWindow(ctk.CTkToplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        self.title("Adicionar Piloto Manualmente")
-        self.geometry("400x500")
-        self.transient(master)  # Sobrepõe a janela principal
-        self.grab_set()  # Modal
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=5)
-
-        # Campo para Selecionar Categoria
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
-        self.label_categoria.pack(pady=10)
-
-        self.categorias = self.get_categorias()
-        if not self.categorias:
-            messagebox.showerror("Erro", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
-            self.destroy()
-            return
-
-        self.categoria_var = StringVar()
-        self.dropdown_categoria = ctk.CTkComboBox(
-            self,
-            values=[cat[1] for cat in self.categorias],
-            variable=self.categoria_var
-        )
-        self.dropdown_categoria.pack(pady=5)
-
-        # Seleção de Time (opcional)
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = self.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Botão para Salvar Piloto
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Piloto", command=self.salvar_piloto)
-        self.btn_salvar.pack(pady=20)
-
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
-
-    def salvar_piloto(self):
-        nome = self.entry_nome.get().strip()
-        categoria_nome = self.categoria_var.get()
-        time_nome = self.time_var.get()
-
-        if not nome or not categoria_nome:
-            messagebox.showerror("Erro", "Todos os campos obrigatórios devem ser preenchidos.")
-            return
-
-        try:
-            cursor.execute("SELECT id FROM categorias WHERE nome = ?", (categoria_nome,))
-            categoria = cursor.fetchone()
-            if not categoria:
-                messagebox.showerror("Erro", "Categoria inválida.")
-                return
-            categoria_id = categoria[0]
-
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
-            piloto = cursor.fetchone()
-            if piloto:
-                piloto_id = piloto[0]
-            else:
-                cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome,))
-                piloto_id = cursor.lastrowid
-
-            cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                           (piloto_id, categoria_id))
-
-            # Se um time foi selecionado, associá-lo ao piloto
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
-
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            # Se nenhum time for selecionado, garantir que não haja associação
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto cadastrado com sucesso!")
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Piloto já está associado a esta categoria.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar piloto: {e}")
 
 
 # Exemplo de como integrar as frames em uma janela principal
