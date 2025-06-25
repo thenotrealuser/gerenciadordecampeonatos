@@ -104,13 +104,3 @@ def verificar_ou_adicionar_coluna_corrida_de_times():
             print("Coluna corrida_de_times já existe.")
     except Exception as e:
         print(f"Erro ao verificar ou adicionar a coluna corrida_de_times: {e}")
-def verificar_estrutura_banco():
-    # Verificar se a coluna 'adv' existe na tabela 'resultados_etapas'
-    cursor.execute("PRAGMA table_info(resultados_etapas)")
-    colunas = [info[1] for info in cursor.fetchall()]
-
-    # Se a coluna 'adv' não existir, adicioná-la
-    if 'adv' not in colunas:
-        cursor.execute("ALTER TABLE resultados_etapas ADD COLUMN adv INTEGER DEFAULT 0")
-        conn.commit()
-        print("Coluna 'adv' adicionada com sucesso à tabela 'resultados_etapas'.")
