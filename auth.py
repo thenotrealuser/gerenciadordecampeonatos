@@ -1,4 +1,3 @@
-import sqlite3
 import sys
 from tkinter import messagebox, Tk, Entry, Button
 import customtkinter as ctk

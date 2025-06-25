@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import ttk
-from database import cursor, conn
+from database import cursor
 
 class HistoricoSorteiosFrame(ctk.CTkFrame):
     def __init__(self, master):

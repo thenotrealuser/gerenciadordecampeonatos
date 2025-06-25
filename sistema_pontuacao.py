@@ -3,7 +3,7 @@ from tkinter import Listbox
 from tkinter import END
 from database import cursor
 import sqlite3
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 from database import conn
 
 

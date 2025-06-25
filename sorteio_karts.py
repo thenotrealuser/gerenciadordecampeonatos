@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from database import cursor, conn
 from tkinter import StringVar
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import random
 import pandas as pd
 

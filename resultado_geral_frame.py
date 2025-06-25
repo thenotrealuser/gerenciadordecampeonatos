@@ -5,7 +5,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, Table, TableStyle, SimpleDocTemplate
-from database import cursor, conn
+from database import cursor
 
 
 class ResultadoGeralFrame(ctk.CTkFrame):

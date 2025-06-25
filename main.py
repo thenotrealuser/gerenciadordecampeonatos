@@ -9,7 +9,7 @@ from sorteio_karts import SorteioKartsFrame
 from importar_pilotos import ImportarPilotosFrame
 from sistema_pontuacao import SistemaPontuacaoFrame
 from historico_sorteios import HistoricoSorteiosFrame
-from database import cursor, conn, verificar_estrutura_banco, setup_database
+from database import cursor, conn, setup_database
 
 setup_database()
 
