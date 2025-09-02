@@ -1,101 +1,171 @@
+import sys
 import sqlite3
-
-import customtkinter as ctk
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox,
+    QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 from database import cursor, conn
-from tkinter import StringVar, messagebox, filedialog
 
 
-class ImportarPilotosFrame(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack(fill="both", expand=True, padx=20, pady=20)
+class ImportarPilotosWidget(QWidget):
+    """
+    Widget para importar uma lista de pilotos de um arquivo .txt ou .csv
+    e associá-los a uma categoria específica.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.categorias_map = {}  # Dicionário para mapear nome da categoria para ID
+        self.init_ui()
+        self.carregar_categorias()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
         # Título
-        self.label = ctk.CTkLabel(self, text="Importar Lista de Pilotos", font=ctk.CTkFont(size=20, weight="bold"))
-        self.label.pack(pady=10)
+        label_titulo = QLabel("Importar Lista de Pilotos")
+        font = QFont("Arial", 16, QFont.Weight.Bold)
+        label_titulo.setFont(font)
+        label_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(label_titulo)
 
-        # Seleção de Arquivo
-        self.btn_selecionar_arquivo = ctk.CTkButton(self, text="Selecionar Arquivo TXT/CSV",
-                                                    command=self.selecionar_arquivo)
-        self.btn_selecionar_arquivo.pack(pady=10)
+        # Seletor de Categoria
+        label_categoria = QLabel("1. Selecione a categoria para associar os pilotos:")
+        main_layout.addWidget(label_categoria)
 
-        # Seleção de Categoria
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
-        self.label_categoria.pack(pady=5)
+        self.combo_categoria = QComboBox()
+        main_layout.addWidget(self.combo_categoria)
 
-        self.categorias = self.get_categorias()
-        self.categoria_var = StringVar()
-        self.dropdown_categoria = ctk.CTkComboBox(
+        # Botão para selecionar arquivo
+        label_arquivo = QLabel("2. Selecione o arquivo de texto (.txt) ou CSV (.csv):")
+        main_layout.addWidget(label_arquivo)
+
+        btn_selecionar_arquivo = QPushButton("Selecionar Arquivo e Importar")
+        btn_selecionar_arquivo.clicked.connect(self.selecionar_e_importar_arquivo)
+        main_layout.addWidget(btn_selecionar_arquivo)
+
+        main_layout.addStretch()  # Empurra os widgets para cima
+
+    def carregar_categorias(self):
+        """Busca as categorias no banco de dados e preenche o QComboBox."""
+        try:
+            cursor.execute("SELECT id, nome FROM categorias ORDER BY nome")
+            categorias = cursor.fetchall()
+            self.combo_categoria.clear()
+            self.categorias_map.clear()
+
+            self.combo_categoria.addItem("-- Selecione uma categoria --")
+            for cat_id, cat_nome in categorias:
+                self.combo_categoria.addItem(cat_nome)
+                self.categorias_map[cat_nome] = cat_id
+        except Exception as e:
+            QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao carregar categorias: {e}")
+
+    def selecionar_e_importar_arquivo(self):
+        """Abre o diálogo de seleção de arquivo e inicia a importação."""
+        categoria_nome = self.combo_categoria.currentText()
+        if not categoria_nome or categoria_nome == "-- Selecione uma categoria --":
+            QMessageBox.warning(self, "Seleção Necessária", "Por favor, selecione uma categoria antes de importar.")
+            return
+
+        categoria_id = self.categorias_map.get(categoria_nome)
+        if categoria_id is None:
+            QMessageBox.critical(self, "Erro", "A categoria selecionada é inválida.")
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
-            values=[cat[1] for cat in self.categorias],
-            variable=self.categoria_var
+            "Selecionar Arquivo de Pilotos",
+            "",  # Diretório inicial
+            "Arquivos de Texto (*.txt);;Arquivos CSV (*.csv);;Todos os Arquivos (*)"
         )
-        self.dropdown_categoria.pack(pady=5)
 
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
+        if file_path:
+            self.importar_pilotos_do_arquivo(file_path, categoria_id)
 
-    def selecionar_arquivo(self):
-        arquivo = filedialog.askopenfilename(title="Selecionar Arquivo",
-                                             filetypes=[("TXT Files", "*.txt"), ("CSV Files", "*.csv")])
-        if not arquivo:
-            return
-        categoria_nome = self.categoria_var.get()
-        if not categoria_nome:
-            messagebox.showerror("Erro", "Selecione uma categoria.")
-            return
-        categoria = next((cat for cat in self.categorias if cat[1] == categoria_nome), None)
-        if not categoria:
-            messagebox.showerror("Erro", "Categoria inválida.")
-            return
-        importar_pilotos(arquivo, categoria[0])
+    def importar_pilotos_do_arquivo(self, arquivo_path, categoria_id):
+        """Lê o arquivo e insere os pilotos no banco de dados."""
+        try:
+            with open(arquivo_path, 'r', encoding='utf-8') as f:
+                linhas = f.readlines()
 
+            pilotos = [linha.strip() for linha in linhas if linha.strip()]
+            pilotos_importados = 0
+            pilotos_associados = 0
 
-def importar_pilotos(arquivo, categoria_id):
-    try:
-        with open(arquivo, 'r', encoding='utf-8') as f:
-            linhas = f.readlines()
+            for nome in pilotos:
+                nome_normalizado = nome.strip().lower()
+                if not nome_normalizado:
+                    continue
 
-        # Remover quebras de linha e linhas vazias
-        pilotos = [linha.strip() for linha in linhas if linha.strip()]
+                # Verifica se o piloto já existe ou o insere
+                cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_normalizado,))
+                piloto_result = cursor.fetchone()
+                if piloto_result:
+                    piloto_id = piloto_result[0]
+                else:
+                    cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome_normalizado,))
+                    piloto_id = cursor.lastrowid
+                    pilotos_importados += 1
 
-        # Processar os pilotos como necessário
-        for nome in pilotos:
-            if not nome:
-                continue
-            nome = nome.strip().lower()  # Normaliza o nome para minúsculas
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
-            piloto = cursor.fetchone()
-            if piloto:
-                piloto_id = piloto[0]
-            else:
-                cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome,))
-                piloto_id = cursor.lastrowid
-            try:
-                cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                               (piloto_id, categoria_id))
-            except sqlite3.IntegrityError:
-                continue
+                # Associa o piloto à categoria, ignorando se a associação já existir
+                try:
+                    cursor.execute(
+                        "INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
+                        (piloto_id, categoria_id)
+                    )
+                    pilotos_associados += 1
+                except sqlite3.IntegrityError:
+                    # O piloto já estava associado a esta categoria, ignora o erro.
+                    continue
 
-        conn.commit()
-        messagebox.showinfo("Sucesso", "Pilotos importados com sucesso!")
-    except Exception as e:
-        messagebox.showerror("Erro", f"Erro ao importar pilotos: {e}")
+            conn.commit()
+            mensagem = (f"Importação concluída!\n\n"
+                        f"- {pilotos_importados} novo(s) piloto(s) cadastrado(s).\n"
+                        f"- {pilotos_associados} piloto(s) associado(s) à categoria.")
+            QMessageBox.information(self, "Sucesso", mensagem)
+        except Exception as e:
+            QMessageBox.critical(self, "Erro na Importação", f"Ocorreu um erro ao importar os pilotos: {e}")
 
 
-def selecionar_arquivo():
-    arquivo = filedialog.askopenfilename(title="Selecionar Arquivo",
-                                         filetypes=[("TXT Files", "*.txt"), ("CSV Files", "*.csv")])
-    if not arquivo:
-        return
-    categoria_nome = dropdown_categoria.get()
-    if not categoria_nome:
-        messagebox.showerror("Erro", "Selecione uma categoria.")
-        return
-    categoria = next((cat for cat in categorias if cat[1] == categoria_nome), None)
-    if not categoria:
-        messagebox.showerror("Erro", "Categoria inválida.")
-        return
-    importar_pilotos(arquivo, categoria[0])
+# Bloco para teste individual do widget
+if __name__ == '__main__':
+    from PyQt6.QtWidgets import QApplication, QMainWindow
+
+
+    def setup_test_database():
+        conn_test = sqlite3.connect(':memory:')
+        cursor_test = conn_test.cursor()
+
+        cursor_test.execute("CREATE TABLE categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)")
+        cursor_test.execute("CREATE TABLE pilotos (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)")
+        cursor_test.execute("""
+            CREATE TABLE pilotos_categorias (
+                piloto_id INTEGER, 
+                categoria_id INTEGER,
+                PRIMARY KEY (piloto_id, categoria_id)
+            )
+        """)
+
+        cursor_test.execute("INSERT INTO categorias (nome) VALUES ('Graduados'), ('Novatos')")
+        cursor_test.execute("INSERT INTO pilotos (nome) VALUES ('ayrton senna')")
+        cursor_test.execute("INSERT INTO pilotos_categorias VALUES (1, 1)")
+
+        conn_test.commit()
+        return conn_test, cursor_test
+
+
+    conn, cursor = setup_test_database()
+
+    app = QApplication(sys.argv)
+    window = QMainWindow()
+    window.setWindowTitle("Teste de Importação de Pilotos")
+    window.setCentralWidget(ImportarPilotosWidget())
+    window.resize(500, 300)
+    window.show()
+    sys.exit(app.exec())

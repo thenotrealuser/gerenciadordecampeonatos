@@ -1,147 +1,205 @@
-from tkinter import ttk, messagebox
-
-import customtkinter as ctk
+import sys
+import sqlite3
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
+    QMessageBox, QInputDialog
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 from database import cursor, conn
-from tkinter import simpledialog
 
 
-class CadastroTimesFrame(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack(fill="both", expand=True, padx=20, pady=20)
+class CadastroTimesWidget(QWidget):
+    """
+    Widget para o cadastro, edição e remoção de times (equipes) do campeonato.
+    """
 
-        # Título
-        self.label = ctk.CTkLabel(self, text="Cadastro de Times", font=ctk.CTkFont(size=20, weight="bold"))
-        self.label.pack(pady=10)
-
-        # Campo para Nome do Time
-        self.label_nome_time = ctk.CTkLabel(self, text="Nome do Time")
-        self.label_nome_time.pack(pady=5)
-        self.entry_nome_time = ctk.CTkEntry(self, placeholder_text="Digite o nome do time")
-        self.entry_nome_time.pack(pady=10)
-
-        # Botão para Salvar Time
-        self.btn_salvar_time = ctk.CTkButton(self, text="Salvar Time", command=self.salvar_time)
-        self.btn_salvar_time.pack(pady=10)
-
-        # Lista de Times Cadastrados
-        self.label_lista_times = ctk.CTkLabel(self, text="Times Cadastrados", font=ctk.CTkFont(size=16, weight="bold"))
-        self.label_lista_times.pack(pady=10)
-
-        self.tree = ttk.Treeview(self, columns=("Nome"), show="headings", selectmode="extended")
-        self.tree.heading("Nome", text="Nome")
-        self.tree.pack(fill="both", expand=True, pady=10)
-
-        # Adicionar scrollbar à Treeview
-        self.scrollbar_tree = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=self.scrollbar_tree.set)
-        self.scrollbar_tree.pack(side='right', fill='y')
-
-        # Botão para Editar Time
-        self.btn_editar_time = ctk.CTkButton(self, text="Editar Time", command=self.editar_time)
-        self.btn_editar_time.pack(pady=10)
-
-        # Botão para Remover Time
-        self.btn_remover_time = ctk.CTkButton(self, text="Remover Time", command=self.remover_time)
-        self.btn_remover_time.pack(pady=10)
-
-        # Carregar times cadastrados
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
         self.carregar_times()
 
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Título
+        label_titulo = QLabel("Cadastro de Times")
+        font = QFont("Arial", 16, QFont.Weight.Bold)
+        label_titulo.setFont(font)
+        label_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(label_titulo)
+
+        # Seção de Cadastro
+        cadastro_layout = QHBoxLayout()
+        label_nome_time = QLabel("Nome do Time:")
+        self.entry_nome_time = QLineEdit()
+        self.entry_nome_time.setPlaceholderText("Digite o nome do time")
+        self.entry_nome_time.returnPressed.connect(self.salvar_time)  # Salva ao pressionar Enter
+        btn_salvar_time = QPushButton("Salvar Time")
+        btn_salvar_time.clicked.connect(self.salvar_time)
+
+        cadastro_layout.addWidget(label_nome_time)
+        cadastro_layout.addWidget(self.entry_nome_time)
+        cadastro_layout.addWidget(btn_salvar_time)
+        main_layout.addLayout(cadastro_layout)
+
+        # Seção da Lista de Times
+        label_lista_times = QLabel("Times Cadastrados")
+        font_lista = QFont("Arial", 12, QFont.Weight.Bold)
+        label_lista_times.setFont(font_lista)
+        main_layout.addWidget(label_lista_times, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(1)
+        self.table.setHorizontalHeaderLabels(["Nome"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        main_layout.addWidget(self.table)
+
+        # Botões de Ação (Editar, Remover)
+        botoes_acao_layout = QHBoxLayout()
+        btn_editar_time = QPushButton("Editar Time Selecionado")
+        btn_editar_time.clicked.connect(self.editar_time)
+        btn_remover_time = QPushButton("Remover Time(s) Selecionado(s)")
+        btn_remover_time.clicked.connect(self.remover_time)
+
+        botoes_acao_layout.addStretch()
+        botoes_acao_layout.addWidget(btn_editar_time)
+        botoes_acao_layout.addWidget(btn_remover_time)
+        main_layout.addLayout(botoes_acao_layout)
+
     def salvar_time(self):
-        nome_time = self.entry_nome_time.get().strip()
+        """Salva um novo time no banco de dados."""
+        nome_time = self.entry_nome_time.text().strip()
         if not nome_time:
-            messagebox.showerror("Erro", "O nome do time é obrigatório.")
+            QMessageBox.warning(self, "Campo Vazio", "O nome do time é obrigatório.")
             return
 
         try:
             cursor.execute("SELECT id FROM times WHERE LOWER(nome) = ?", (nome_time.lower(),))
-            time_existente = cursor.fetchone()
-            if time_existente:
-                messagebox.showerror("Erro", "Já existe um time com esse nome.")
+            if cursor.fetchone():
+                QMessageBox.warning(self, "Nome Duplicado", "Já existe um time com esse nome.")
                 return
 
             cursor.execute("INSERT INTO times (nome) VALUES (?)", (nome_time,))
             conn.commit()
-            messagebox.showinfo("Sucesso", "Time cadastrado com sucesso!")
-            self.entry_nome_time.delete(0, 'end')
-            self.carregar_times()  # Atualizar a lista de times
+            QMessageBox.information(self, "Sucesso", "Time cadastrado com sucesso!")
+            self.entry_nome_time.clear()
+            self.carregar_times()
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar time: {e}")
+            QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao salvar time: {e}")
 
     def carregar_times(self):
-        # Limpar a Treeview
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        # Buscar times cadastrados
-        cursor.execute("SELECT nome FROM times ORDER BY nome")
-        times = cursor.fetchall()
-
-        # Inserir times na Treeview
-        for time in times:
-            self.tree.insert("", "end", values=time)
+        """Carrega e exibe a lista de times cadastrados na tabela."""
+        try:
+            self.table.setRowCount(0)
+            cursor.execute("SELECT nome FROM times ORDER BY nome")
+            times = cursor.fetchall()
+            for row_num, time_data in enumerate(times):
+                self.table.insertRow(row_num)
+                self.table.setItem(row_num, 0, QTableWidgetItem(time_data[0]))
+        except Exception as e:
+            QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao carregar times: {e}")
 
     def editar_time(self):
-        # Verificar se algum time foi selecionado
-        selecionados = self.tree.selection()
-        if len(selecionados) != 1:
-            messagebox.showerror("Erro", "Selecione exatamente um time para editar.")
+        """Abre um diálogo para editar o nome do time selecionado."""
+        selected_rows = self.table.selectionModel().selectedRows()
+        if len(selected_rows) != 1:
+            QMessageBox.warning(self, "Seleção Inválida", "Selecione exatamente um time para editar.")
             return
 
-        # Obter o nome do time selecionado
-        valores = self.tree.item(selecionados[0], 'values')
-        nome_time = valores[0]
+        selected_row = selected_rows[0].row()
+        nome_atual = self.table.item(selected_row, 0).text()
 
-        # Perguntar ao usuário o novo nome do time
-        novo_nome_time = simpledialog.askstring("Editar Time", f"Editar o time '{nome_time}'.\n\nDigite o novo nome:")
-        if not novo_nome_time:
-            return
+        novo_nome, ok = QInputDialog.getText(self, "Editar Time", f"Digite o novo nome para '{nome_atual}':",
+                                             text=nome_atual)
 
-        try:
-            # Verificar se o novo nome já existe
-            cursor.execute("SELECT id FROM times WHERE LOWER(nome) = ?", (novo_nome_time.lower(),))
-            time_existente = cursor.fetchone()
-            if time_existente:
-                messagebox.showerror("Erro", "Já existe um time com esse nome.")
-                return
+        if ok and novo_nome.strip():
+            novo_nome = novo_nome.strip()
+            if novo_nome.lower() == nome_atual.lower():
+                return  # Nenhuma alteração
 
-            # Atualizar o nome do time
-            cursor.execute("UPDATE times SET nome = ? WHERE nome = ?", (novo_nome_time, nome_time))
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Time atualizado com sucesso!")
-            self.carregar_times()  # Atualizar a lista de times
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao editar time: {e}")
+            try:
+                cursor.execute("SELECT id FROM times WHERE LOWER(nome) = ?", (novo_nome.lower(),))
+                if cursor.fetchone():
+                    QMessageBox.warning(self, "Nome Duplicado", "Já existe um time com esse nome.")
+                    return
+
+                cursor.execute("UPDATE times SET nome = ? WHERE nome = ?", (novo_nome, nome_atual))
+                conn.commit()
+                QMessageBox.information(self, "Sucesso", "Time atualizado com sucesso!")
+                self.carregar_times()
+            except Exception as e:
+                QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao editar time: {e}")
 
     def remover_time(self):
-        # Verificar se algum time foi selecionado
-        selecionados = self.tree.selection()
-        if not selecionados:
-            messagebox.showerror("Erro", "Selecione um ou mais times para remover.")
+        """Remove os times selecionados do banco de dados."""
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Seleção Necessária", "Selecione um ou mais times para remover.")
             return
 
-        # Obter os nomes dos times selecionados
-        nomes_times = [self.tree.item(sel, 'values')[0] for sel in selecionados]
+        nomes_times = [self.table.item(row.row(), 0).text() for row in selected_rows]
 
-        # Confirmar a remoção
-        if messagebox.askyesno("Remover Times", f"Tem certeza que deseja remover os times: {', '.join(nomes_times)}?"):
+        confirmacao = QMessageBox.question(self, "Confirmar Remoção",
+                                           f"Tem certeza que deseja remover os seguintes times?\n\n- {', '.join(nomes_times)}\n\nEsta ação não pode ser desfeita.",
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if confirmacao == QMessageBox.StandardButton.Yes:
             try:
                 for nome_time in nomes_times:
-                    # Buscar o time pelo nome
                     cursor.execute("SELECT id FROM times WHERE nome = ?", (nome_time,))
                     time = cursor.fetchone()
-                    if not time:
-                        messagebox.showerror("Erro", f"Time '{nome_time}' não encontrado.")
-                        continue
-                    time_id = time[0]
-
-                    # Remover o time da tabela times e das tabelas relacionadas (pilotos_times)
-                    cursor.execute("DELETE FROM times WHERE id = ?", (time_id,))
-                    cursor.execute("DELETE FROM pilotos_times WHERE time_id = ?", (time_id,))
+                    if time:
+                        time_id = time[0]
+                        # Remove associações de pilotos com este time
+                        cursor.execute("DELETE FROM pilotos_times WHERE time_id = ?", (time_id,))
+                        # Remove o time
+                        cursor.execute("DELETE FROM times WHERE id = ?", (time_id,))
 
                 conn.commit()
-                messagebox.showinfo("Sucesso", "Times removidos com sucesso!")
-                self.carregar_times()  # Atualizar a lista de times
+                QMessageBox.information(self, "Sucesso", "Times removidos com sucesso!")
+                self.carregar_times()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao remover times: {e}")
+                QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao remover times: {e}")
+
+
+# Bloco para teste individual do widget
+if __name__ == '__main__':
+    from PyQt6.QtWidgets import QApplication, QMainWindow
+
+
+    def setup_test_database():
+        conn_test = sqlite3.connect('campeonato_test.db')
+        cursor_test = conn_test.cursor()
+        cursor_test.execute('''
+            CREATE TABLE IF NOT EXISTS times (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT UNIQUE NOT NULL
+            );
+        ''')
+        cursor_test.execute('''
+            CREATE TABLE IF NOT EXISTS pilotos_times (
+                piloto_id INTEGER UNIQUE,
+                time_id INTEGER,
+                FOREIGN KEY (piloto_id) REFERENCES pilotos(id),
+                FOREIGN KEY (time_id) REFERENCES times(id)
+            );
+        ''')
+        conn_test.commit()
+        return conn_test, cursor_test
+
+
+    conn, cursor = setup_test_database()
+
+    app = QApplication(sys.argv)
+    window = QMainWindow()
+    window.setWindowTitle("Teste do Cadastro de Times")
+    window.setCentralWidget(CadastroTimesWidget())
+    window.resize(600, 400)
+    window.show()
+    sys.exit(app.exec())

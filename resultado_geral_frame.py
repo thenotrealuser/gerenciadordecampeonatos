@@ -1,288 +1,282 @@
-from tkinter import StringVar, ttk, messagebox, filedialog
+import sys
+import sqlite3
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QFileDialog,
+    QLineEdit
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QIntValidator
+from database import cursor, conn
 
-import customtkinter as ctk
+# Importações para o PDF
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph, Table, TableStyle, SimpleDocTemplate
-from database import cursor, conn
+from reportlab.platypus import Paragraph, Table, TableStyle, SimpleDocTemplate, Spacer
 
 
-class ResultadoGeralFrame(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack(fill="both", expand=True, padx=20, pady=20)
+class ResultadoGeralWidget(QWidget):
+    """
+    Widget para calcular e exibir o resultado geral do campeonato,
+    com opções de descarte e exportação para PDF.
+    """
 
-        # Inicializar o número de descartes aplicados
-        self.descartar_aplicado = 0
-        self.pontuacao = {}  # Inicializar pontuação
-        self.pilotos_resultados = {}  # Inicializar resultados dos pilotos
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Armazenar estado para recálculos e exportação
+        self.pontuacao_final = {}
+        self.pilotos_resultados_por_etapa = {}
+        self.etapas_ordenadas = []
+        self.descartes_aplicados = 0
+
+        self.init_ui()
+        self.carregar_categorias()
+
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
 
         # Título
-        self.label = ctk.CTkLabel(self, text="Resultado Geral do Campeonato", font=ctk.CTkFont(size=20, weight="bold"))
-        self.label.pack(pady=10)
+        label_titulo = QLabel("Resultado Geral do Campeonato")
+        label_titulo.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        label_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(label_titulo)
 
-        # Seleção de Categoria
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
-        self.label_categoria.pack(pady=5)
+        # Controles (Categoria e Descartes)
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Categoria:"))
+        self.combo_categoria = QComboBox()
+        self.combo_categoria.currentIndexChanged.connect(self.atualizar_resultado)
+        controls_layout.addWidget(self.combo_categoria, 1)
 
-        self.categorias = self.get_categorias()
-        self.categoria_var = StringVar()
-        self.dropdown_categoria = ctk.CTkComboBox(
-            self,
-            values=[cat[1] for cat in self.categorias],
-            variable=self.categoria_var,
-            command=self.atualizar_resultado
-        )
-        self.dropdown_categoria.pack(pady=5)
+        controls_layout.addWidget(QLabel("Descartar Piores Resultados:"))
+        self.entry_descartes = QLineEdit("0")
+        self.entry_descartes.setValidator(QIntValidator(0, 99))
+        self.entry_descartes.setFixedWidth(50)
+        controls_layout.addWidget(self.entry_descartes)
 
-        # Botões para Aplicar Descarte
-        self.btn_descartar_2 = ctk.CTkButton(self, text="Aplicar Descarte de 2 Etapas",
-                                             command=lambda: self.aplicar_descarte(2))
-        self.btn_descartar_2.pack(pady=5)
+        btn_aplicar_descarte = QPushButton("Atualizar / Aplicar Descarte")
+        btn_aplicar_descarte.clicked.connect(self.atualizar_resultado)
+        controls_layout.addWidget(btn_aplicar_descarte)
 
-        # Entrada para Número de Descartes
-        self.label_descartar_personalizado = ctk.CTkLabel(self, text="Quantos descartes deseja aplicar?")
-        self.label_descartar_personalizado.pack(pady=5)
+        controls_layout.addStretch()
+        main_layout.addLayout(controls_layout)
 
-        self.entry_descartar = ctk.CTkEntry(self, placeholder_text="Digite o número de descartes")
-        self.entry_descartar.pack(pady=5)
+        # Tabela de Resultados
+        self.table_resultados = QTableWidget()
+        self.table_resultados.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table_resultados.setSortingEnabled(True)  # Habilita ordenação por coluna
+        main_layout.addWidget(self.table_resultados)
 
-        self.btn_descartar_personalizado = ctk.CTkButton(self, text="Aplicar Descarte Personalizado",
-                                                         command=self.aplicar_descarte_personalizado)
-        self.btn_descartar_personalizado.pack(pady=5)
+        # Botão de Exportação
+        btn_exportar_pdf = QPushButton("Exportar Resultado para PDF")
+        btn_exportar_pdf.clicked.connect(self.exportar_para_pdf)
+        main_layout.addWidget(btn_exportar_pdf, 0, Qt.AlignmentFlag.AlignRight)
 
-        # Treeview para exibir os resultados em formato de planilha
-        self.tree_frame = ctk.CTkFrame(self)
-        self.tree_frame.pack(fill="both", expand=True, pady=10)
-
-        columns = ('Piloto', 'Pontos', 'Posições')
-
-        # Criação do Treeview com colunas
-        self.tree = ttk.Treeview(self.tree_frame, columns=columns, show='headings', height=10)
-        self.tree.heading('Piloto', text='Piloto')
-        self.tree.heading('Pontos', text='Pontos')
-        self.tree.heading('Posições', text='Posições')
-
-        self.tree.column('Piloto', width=150)
-        self.tree.column('Pontos', width=80)
-        self.tree.column('Posições', width=250)
-
-        # Adicionando scrollbar horizontal e vertical
-        self.scrollbar_x = ttk.Scrollbar(self.tree_frame, orient="horizontal", command=self.tree.xview)
-        self.scrollbar_y = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(xscrollcommand=self.scrollbar_x.set, yscrollcommand=self.scrollbar_y.set)
-
-        self.tree.pack(side='left', fill='both', expand=True)
-        self.scrollbar_x.pack(side='bottom', fill='x')
-        self.scrollbar_y.pack(side='right', fill='y')
-
-        # Botão para reverter os descartes
-        self.btn_reverter_descartes = ctk.CTkButton(self, text="Reverter Descartes", command=self.reverter_descartes)
-        self.btn_reverter_descartes.pack(pady=5)
-
-        # Botão para exportar os resultados em PDF
-        self.btn_exportar_pdf = ctk.CTkButton(self, text="Exportar Resultados", command=self.exportar_resultado_campeonato)
-        self.btn_exportar_pdf.pack(pady=5)
-
-        self.atualizar_resultado()
-
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def aplicar_descarte(self, numero_descartes):
-        self.atualizar_resultado(descartar=numero_descartes)
-
-    def aplicar_descarte_personalizado(self):
-        try:
-            numero_descartes = int(self.entry_descartar.get())
-            if numero_descartes < 0:
-                raise ValueError
-            self.atualizar_resultado(descartar=numero_descartes)
-        except ValueError:
-            messagebox.showerror("Erro", "Por favor, insira um número válido de descartes.")
-
-    def atualizar_resultado(self, event=None, descartar=0):
-        # Atualizar o número de descartes aplicados
-        self.descartar_aplicado = descartar
-
-        categoria_nome = self.categoria_var.get()
-        if not categoria_nome:
-            return
-
-        # Buscar a categoria selecionada
-        cursor.execute("SELECT id FROM categorias WHERE nome = ?", (categoria_nome,))
-        categoria = cursor.fetchone()
-        if not categoria:
-            messagebox.showerror("Erro", "Categoria selecionada inválida.")
-            return
-        categoria_id = categoria[0]
-
-        # Carregar o sistema de pontuação geral (padrão para todas as categorias)
-        sistema_pontuacao = self.get_sistema_pontuacao()
-        if not sistema_pontuacao:
-            messagebox.showwarning("Aviso", "Sistema de pontuação não configurado.")
-            return
-
-        # Buscar resultados da categoria, ordenando as etapas corretamente
-        cursor.execute('''SELECT p.nome, r.posicao, r.melhor_volta, r.pole_position, r.adv, e.nome, e.id
-                          FROM resultados_etapas r
-                          JOIN pilotos p ON r.piloto_id = p.id
-                          JOIN etapas e ON r.etapa_id = e.id
-                          WHERE r.categoria_id = ?
-                          ORDER BY e.id ASC''', (categoria_id,))
-        resultados = cursor.fetchall()
-
-        self.pontuacao = {}  # Reinicializar pontuação
-        self.pilotos_resultados = {}  # Reinicializar resultados dos pilotos
-        self.etapas_set = set()  # Reinicializar conjunto de etapas
-
-        # Agrupar resultados por piloto e coletar as etapas
-        for res in resultados:
-            nome, posicao, melhor_volta, pole_position, adv, etapa_nome, etapa_id = res
-            pontos_posicao = sistema_pontuacao.get(posicao, 0)
-            pontos_melhor_volta = sistema_pontuacao.get("melhor_volta", 0) if melhor_volta else 0
-            pontos_pole_position = sistema_pontuacao.get("pole_position", 0) if pole_position else 0
-            total_pontos = pontos_posicao + pontos_melhor_volta + pontos_pole_position
-
-            if nome not in self.pontuacao:
-                self.pontuacao[nome] = 0
-                self.pilotos_resultados[nome] = []
-
-            self.pontuacao[nome] += total_pontos
-            self.pilotos_resultados[nome].append((total_pontos, etapa_nome, posicao, etapa_id, adv))
-
-            # Adicionar as etapas ao conjunto
-            self.etapas_set.add((etapa_nome, etapa_id))
-
-        # Aplicar descarte dos piores resultados, exceto os que têm ADV
-        for piloto, pontos_list in self.pilotos_resultados.items():
-            # Ordena, mantendo os ADV no final (não elegíveis para descarte)
-            pontos_list.sort(key=lambda x: (x[4] == 'Sim', x[0]))
-            if len(pontos_list) > descartar:
-                pontos_descartados = [p for p in pontos_list[:descartar] if p[4] != 'Sim']  # Pega os piores sem ADV
-                self.pontuacao[piloto] -= sum(p[0] for p in pontos_descartados)  # Subtrai os piores resultados
-
-                # Remover os pontos descartados da lista
-                self.pilotos_resultados[piloto] = [p for p in pontos_list if p not in pontos_descartados]
-            else:
-                self.pilotos_resultados[piloto] = pontos_list
-
-            # Ordenar os resultados restantes por ordem de etapas
-            self.pilotos_resultados[piloto] = sorted(self.pilotos_resultados[piloto], key=lambda x: x[3])  # Ordena pela etapa_id
-
-        # Limpar a Treeview
-        for i in self.tree.get_children():
-            self.tree.delete(i)
-
-        # Exibir resultados na Treeview
-        classificacao = sorted(self.pontuacao.items(), key=lambda x: x[1], reverse=True)
-        for piloto, pontos in classificacao:
-            posicoes = ', '.join(f"{etapa_nome}: {posicao}" for _, etapa_nome, posicao, _, _ in self.pilotos_resultados[piloto])
-            self.tree.insert("", "end", values=(piloto, pontos, posicoes))
-
-    def reverter_descartes(self):
-        # Atualizar resultado sem descarte
-        self.atualizar_resultado(descartar=0)
+    def carregar_categorias(self):
+        self.combo_categoria.clear()
+        self.combo_categoria.addItem("-- Selecione --", userData=None)
+        cursor.execute("SELECT id, nome FROM categorias ORDER BY nome")
+        for cat_id, cat_nome in cursor.fetchall():
+            self.combo_categoria.addItem(cat_nome, userData=cat_id)
 
     def get_sistema_pontuacao(self):
-        """Busca o sistema de pontuação geral, que é aplicado a todas as categorias"""
-        cursor.execute("SELECT posicao, pontos FROM sistema_pontuacao ORDER BY posicao")
-        rows = cursor.fetchall()
-        sistema = {pos: pontos for pos, pontos in rows}
-
-        # Pegar pontos de pole position e melhor volta
+        cursor.execute("SELECT posicao, pontos FROM sistema_pontuacao")
+        sistema = {pos: pts for pos, pts in cursor.fetchall()}
         cursor.execute("SELECT pole_position, melhor_volta FROM sistema_pontuacao_extras")
         extras = cursor.fetchone()
         if extras:
             sistema["pole_position"] = extras[0]
             sistema["melhor_volta"] = extras[1]
+        return sistema
 
-        return sistema if sistema else None
+    def atualizar_resultado(self):
+        categoria_id = self.combo_categoria.currentData()
+        if not categoria_id:
+            self.table_resultados.setRowCount(0)
+            self.table_resultados.setColumnCount(0)
+            return
 
-    def exportar_resultado_campeonato(self):
         try:
-            # Categoria selecionada
-            categoria_nome = self.categoria_var.get()
-            if not categoria_nome:
-                messagebox.showerror("Erro", "Selecione uma categoria para exportar.")
+            self.descartes_aplicados = int(self.entry_descartes.text())
+        except ValueError:
+            self.descartes_aplicados = 0
+
+        try:
+            sistema_pontuacao = self.get_sistema_pontuacao()
+            if not sistema_pontuacao:
+                QMessageBox.warning(self, "Aviso", "Sistema de pontuação não configurado.")
                 return
 
-            # Buscar ID da categoria e se é de times
-            cursor.execute("SELECT id, corrida_de_times FROM categorias WHERE nome = ?", (categoria_nome,))
-            categoria = cursor.fetchone()
-            if not categoria:
-                messagebox.showerror("Erro", "Categoria inválida.")
-                return
-            categoria_id, corrida_de_times = categoria
+            # 1. Obter todos os resultados e etapas
+            query = """
+                SELECT p.nome, r.posicao, r.melhor_volta, r.pole_position, r.adv, e.nome, e.data
+                FROM resultados_etapas r
+                JOIN pilotos p ON r.piloto_id = p.id
+                JOIN etapas e ON r.etapa_id = e.id
+                WHERE r.categoria_id = ?
+            """
+            cursor.execute(query, (categoria_id,))
+            resultados = cursor.fetchall()
 
-            # Ordenar etapas por data
-            etapas_ordenadas = sorted(self.etapas_set, key=lambda x: x[1])  # Ordena por data
-            etapas_nomes = [etapa for etapa, _ in etapas_ordenadas]
+            # 2. Calcular pontos e agrupar por piloto e etapa
+            etapas_presentes = {}
+            self.pilotos_resultados_por_etapa = {}
 
-            # Criar tabela para exportação
-            elementos = []
+            for nome_piloto, pos, mv, pole, adv, nome_etapa, data_etapa in resultados:
+                pontos_pos = sistema_pontuacao.get(pos, 0)
+                pontos_mv = sistema_pontuacao.get("melhor_volta", 0) if mv else 0
+                pontos_pole = sistema_pontuacao.get("pole_position", 0) if pole else 0
+                total_pontos = pontos_pos + pontos_mv + pontos_pole
+
+                if nome_piloto not in self.pilotos_resultados_por_etapa:
+                    self.pilotos_resultados_por_etapa[nome_piloto] = {}
+
+                self.pilotos_resultados_por_etapa[nome_piloto][nome_etapa] = {
+                    'pontos': total_pontos,
+                    'adv': adv
+                }
+
+                if nome_etapa not in etapas_presentes:
+                    etapas_presentes[nome_etapa] = data_etapa
+
+            # Ordenar etapas pela data
+            self.etapas_ordenadas = sorted(etapas_presentes, key=etapas_presentes.get)
+
+            # 3. Aplicar descartes e calcular pontuação final
+            self.pontuacao_final = {}
+            for piloto, etapas in self.pilotos_resultados_por_etapa.items():
+                # Lista de (pontos, adv) para ordenação
+                pontuacoes = [(etapa['pontos'], etapa['adv']) for etapa in etapas.values()]
+                # Ordena por pontos (crescente), com ADV (adv=1) indo para o final para não serem descartados
+                pontuacoes.sort(key=lambda x: (x[1], x[0]))
+
+                pontos_a_descartar = 0
+                descartes_efetivos = 0
+                for pontos, adv in pontuacoes:
+                    if descartes_efetivos < self.descartes_aplicados and not adv:
+                        pontos_a_descartar += pontos
+                        descartes_efetivos += 1
+
+                total_bruto = sum(p for p, a in pontuacoes)
+                self.pontuacao_final[piloto] = total_bruto - pontos_a_descartar
+
+            # 4. Exibir na tabela
+            self.exibir_na_tabela()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Ocorreu um erro ao calcular o resultado: {e}")
+
+    def exibir_na_tabela(self):
+        # Limpa e configura cabeçalhos
+        self.table_resultados.setRowCount(0)
+        headers = ["Pos", "Piloto"] + self.etapas_ordenadas + ["Pontos Totais"]
+        self.table_resultados.setColumnCount(len(headers))
+        self.table_resultados.setHorizontalHeaderLabels(headers)
+
+        # Classificação final dos pilotos
+        classificacao = sorted(self.pontuacao_final.items(), key=lambda item: item[1], reverse=True)
+
+        for i, (piloto, pontos_totais) in enumerate(classificacao):
+            self.table_resultados.insertRow(i)
+
+            # Coluna Posição
+            pos_item = QTableWidgetItem(str(i + 1))
+            pos_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table_resultados.setItem(i, 0, pos_item)
+
+            # Coluna Piloto
+            self.table_resultados.setItem(i, 1, QTableWidgetItem(piloto.title()))
+
+            # Colunas de Etapas
+            for j, etapa_nome in enumerate(self.etapas_ordenadas):
+                pontos_etapa = self.pilotos_resultados_por_etapa[piloto].get(etapa_nome, {}).get('pontos', '-')
+                etapa_item = QTableWidgetItem(str(pontos_etapa))
+                etapa_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table_resultados.setItem(i, 2 + j, etapa_item)
+
+            # Coluna Pontos Totais
+            total_item = QTableWidgetItem(str(pontos_totais))
+            total_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            total_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table_resultados.setItem(i, len(headers) - 1, total_item)
+
+        self.table_resultados.resizeColumnsToContents()
+        self.table_resultados.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+    def exportar_para_pdf(self):
+        categoria_nome = self.combo_categoria.currentText()
+        if not self.pontuacao_final:
+            QMessageBox.warning(self, "Aviso", f"Não há resultados para exportar para a categoria '{categoria_nome}'.")
+            return
+
+        default_filename = f"resultado_geral_{categoria_nome.replace(' ', '_')}.pdf"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Salvar PDF", default_filename, "PDF Files (*.pdf)")
+
+        if not file_path:
+            return
+
+        try:
+            doc = SimpleDocTemplate(file_path, pagesize=landscape(A4))
+            elements = []
+            styles = getSampleStyleSheet()
 
             # Título
-            styles = getSampleStyleSheet()
-            titulo = Paragraph(f"Resultado Geral - Categoria: {categoria_nome}", styles['Title'])
-            elementos.append(titulo)
+            elements.append(Paragraph(f"Resultado Geral - Categoria: {categoria_nome}", styles['Title']))
+            if self.descartes_aplicados > 0:
+                elements.append(
+                    Paragraph(f"({self.descartes_aplicados} piores resultados descartados)", styles['Normal']))
+            elements.append(Spacer(1, 12))
 
-            # Cabeçalho atualizado
-            header = ['Pos', 'Piloto'] + [f"{etapa}" for etapa in etapas_nomes] + ['Total Piloto']
-            tabela_dados = [header]
+            # Montagem dos dados da tabela
+            header = ['Pos', 'Piloto'] + self.etapas_ordenadas + ['Total']
+            table_data = [header]
+            classificacao = sorted(self.pontuacao_final.items(), key=lambda item: item[1], reverse=True)
 
-            # Usar os pontos já calculados após o descarte
-            classificacao = sorted(self.pontuacao.items(), key=lambda x: x[1], reverse=True)
-            for idx, (piloto, pontos_totais) in enumerate(classificacao, start=1):
-                linha = [idx, piloto]
-                pontos_por_etapa = {etapa: '-' for etapa in etapas_nomes}
+            for i, (piloto, pontos_totais) in enumerate(classificacao):
+                row = [i + 1, piloto.title()]
+                for etapa_nome in self.etapas_ordenadas:
+                    pontos_etapa = self.pilotos_resultados_por_etapa[piloto].get(etapa_nome, {}).get('pontos', '-')
+                    row.append(str(pontos_etapa))
+                row.append(pontos_totais)
+                table_data.append(row)
 
-                # Preencher pontos das etapas para o piloto
-                for total_pontos, etapa_nome, posicao, _, adv in self.pilotos_resultados[piloto]:
-                    if etapa_nome in pontos_por_etapa:
-                        pontos_por_etapa[etapa_nome] = f"{total_pontos}"
-
-                # Adicionar pontos das etapas e total na linha
-                for etapa in etapas_nomes:
-                    linha.append(pontos_por_etapa[etapa])
-
-                # Adicionar o total do piloto (já ajustado após o descarte)
-                linha.append(pontos_totais)
-
-                tabela_dados.append(linha)
-
-            # Adicionar a marca d'água de descarte se aplicável
-            if self.descartar_aplicado > 0:
-                marca_dagua = Paragraph(f"{self.descartar_aplicado} descartes foram aplicados.", styles['Normal'])
-                elementos.append(marca_dagua)
-
-            # Criar o documento PDF
-            nome_default = f"resultado_campeonato_{categoria_nome.replace(' ', '_').lower()}.pdf"
-            nome_arquivo = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")],
-                                                        initialfile=nome_default, title="Salvar PDF")
-
-            if not nome_arquivo:
-                return
-
-            tabela = Table(tabela_dados)
-            estilo = TableStyle([
+            # Criação e estilo da tabela
+            table = Table(table_data)
+            style = TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ])
+            table.setStyle(style)
+            elements.append(table)
 
-            tabela.setStyle(estilo)
-            elementos.append(tabela)
-
-            pdf = SimpleDocTemplate(nome_arquivo, pagesize=landscape(A4))
-            pdf.build(elementos)
-
-            messagebox.showinfo("Sucesso", f"PDF exportado com sucesso para {nome_arquivo}")
+            doc.build(elements)
+            QMessageBox.information(self, "Sucesso", f"Resultado exportado com sucesso para:\n{file_path}")
 
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao exportar PDF: {e}")
+            QMessageBox.critical(self, "Erro de Exportação", f"Não foi possível gerar o PDF: {e}")
+
+
+if __name__ == '__main__':
+    from PyQt6.QtWidgets import QApplication, QMainWindow
+
+
+    def setup_test_database():
+        # ... (código para criar e popular um banco de dados em memória para teste) ...
+        pass  # Implementação omitida por brevidade, mas necessária para um teste funcional
+
+
+    app = QApplication(sys.argv)
+    window = QMainWindow()
+    # conn, cursor = setup_test_database() # Descomentar com a implementação
+    main_widget = ResultadoGeralWidget()
+    window.setCentralWidget(main_widget)
+    window.resize(1024, 768)
+    window.show()
+    sys.exit(app.exec())

@@ -1,1063 +1,586 @@
-import difflib
-from tkinter import messagebox, StringVar, ttk, simpledialog, END
-from tkinter import Listbox
-import customtkinter as ctk
-from database import cursor, conn
+import sys
 import sqlite3
+import difflib
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QCheckBox,
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMessageBox,
+    QDialog, QDialogButtonBox, QComboBox, QListWidget, QScrollArea, QGroupBox,
+    QInputDialog
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QIntValidator
+from database import cursor, conn
 
-# Certifique-se de que as tabelas 'times' e 'pilotos_times' existam no banco de dados.
-# Exemplo de criação das tabelas:
-# cursor.execute('''
-# CREATE TABLE IF NOT EXISTS times (
-#     id INTEGER PRIMARY KEY AUTOINCREMENT,
-#     nome TEXT UNIQUE NOT NULL
-# )
-# ''')
-# cursor.execute('''
-# CREATE TABLE IF NOT EXISTS pilotos_times (
-#     piloto_id INTEGER UNIQUE,
-#     time_id INTEGER,
-#     FOREIGN KEY (piloto_id) REFERENCES pilotos(id),
-#     FOREIGN KEY (time_id) REFERENCES times(id)
-# )
-# ''')
-# conn.commit()
 
-class CadastroCategoriasFrame(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack(fill="both", expand=True, padx=20, pady=20)
+# (O widget CadastroCategoriasWidget e o diálogo EditarPilotoDialog não foram alterados,
+# mas estão incluídos abaixo para que você possa substituir o arquivo inteiro)
 
-        # Título
-        self.label = ctk.CTkLabel(self, text="Cadastro de Categorias", font=ctk.CTkFont(size=20, weight="bold"))
-        self.label.pack(pady=10)
+# --- Widget para Cadastro de Categorias ---
 
-        # Campo para Nome da Categoria
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome da Categoria")
-        self.entry_nome.pack(pady=10)
-
-        # Campo para Selecionar se é uma Corrida de Times
-        self.label_time = ctk.CTkLabel(self, text="Categoria de Times?")
-        self.label_time.pack(pady=5)
-
-        self.var_corrida_de_times = ctk.BooleanVar()
-        self.checkbox_corrida_de_times = ctk.CTkCheckBox(self, text="Sim", variable=self.var_corrida_de_times)
-        self.checkbox_corrida_de_times.pack(pady=5)
-
-        # Botão para Salvar Categoria
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Categoria", command=self.salvar_categoria)
-        self.btn_salvar.pack(pady=20)
-
-        # Lista de Categorias Cadastradas
-        self.label_lista = ctk.CTkLabel(self, text="Categorias Cadastradas", font=ctk.CTkFont(size=16, weight="bold"))
-        self.label_lista.pack(pady=10)
-
-        # Utilizando tkinter.Listbox dentro do customtkinter Frame
-        self.categorias_listbox = Listbox(self, height=10, selectmode=ctk.SINGLE)
-        self.categorias_listbox.pack(fill="both", expand=True, pady=5)
+class CadastroCategoriasWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
         self.atualizar_lista()
 
-        # Botão para Remover Categoria
-        self.btn_remover = ctk.CTkButton(self, text="Remover Categoria Selecionada", command=self.remover_categoria)
-        self.btn_remover.pack(pady=10)
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        # ... (código interno sem alterações)
+        label_titulo = QLabel("Cadastro de Categorias")
+        label_titulo.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        label_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(label_titulo)
+        form_layout = QHBoxLayout()
+        self.entry_nome = QLineEdit()
+        self.entry_nome.setPlaceholderText("Nome da Categoria")
+        self.checkbox_corrida_de_times = QCheckBox("Categoria de Times?")
+        btn_salvar = QPushButton("Salvar Categoria")
+        form_layout.addWidget(self.entry_nome, 2)
+        form_layout.addWidget(self.checkbox_corrida_de_times, 1)
+        form_layout.addWidget(btn_salvar, 1)
+        main_layout.addLayout(form_layout)
+        main_layout.addWidget(QLabel("Categorias Cadastradas:"))
+        self.categorias_listbox = QListWidget()
+        main_layout.addWidget(self.categorias_listbox)
+        btn_remover = QPushButton("Remover Categoria Selecionada")
+        main_layout.addWidget(btn_remover, 0, Qt.AlignmentFlag.AlignRight)
+        btn_salvar.clicked.connect(self.salvar_categoria)
+        btn_remover.clicked.connect(self.remover_categoria)
+        self.entry_nome.returnPressed.connect(self.salvar_categoria)
 
     def salvar_categoria(self):
-        nome_categoria = self.entry_nome.get().strip()
-        corrida_de_times = self.var_corrida_de_times.get()
-
+        # ... (código interno sem alterações)
+        nome_categoria = self.entry_nome.text().strip()
+        corrida_de_times = self.checkbox_corrida_de_times.isChecked()
         if not nome_categoria:
-            messagebox.showerror("Erro", "O nome da categoria não pode estar vazio.")
+            QMessageBox.warning(self, "Erro", "O nome da categoria não pode estar vazio.")
             return
-
-        # Salvar a nova categoria no banco de dados
         try:
-            cursor.execute("INSERT INTO categorias (nome, corrida_de_times) VALUES (?, ?)", (nome_categoria, corrida_de_times))
+            cursor.execute("INSERT INTO categorias (nome, corrida_de_times) VALUES (?, ?)",
+                           (nome_categoria, corrida_de_times))
             conn.commit()
-            messagebox.showinfo("Sucesso", "Categoria cadastrada com sucesso!")
-            self.entry_nome.delete(0, END)
-            self.var_corrida_de_times.set(False)
+            QMessageBox.information(self, "Sucesso", "Categoria cadastrada com sucesso!")
+            self.entry_nome.clear()
+            self.checkbox_corrida_de_times.setChecked(False)
             self.atualizar_lista()
         except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Já existe uma categoria com esse nome.")
+            QMessageBox.warning(self, "Erro", "Já existe uma categoria com esse nome.")
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar categoria: {e}")
+            QMessageBox.critical(self, "Erro", f"Erro ao salvar categoria: {e}")
 
     def atualizar_lista(self):
-        self.categorias_listbox.delete(0, END)
+        # ... (código interno sem alterações)
+        self.categorias_listbox.clear()
         cursor.execute("SELECT nome FROM categorias ORDER BY nome")
         categorias = cursor.fetchall()
         for cat in categorias:
-            self.categorias_listbox.insert(END, cat[0])
+            self.categorias_listbox.addItem(cat[0])
 
     def remover_categoria(self):
-        try:
-            selecionado = self.categorias_listbox.get(self.categorias_listbox.curselection())
-        except:
-            selecionado = None
-        if not selecionado:
-            messagebox.showerror("Erro", "Selecione uma categoria para remover.")
+        # ... (código interno sem alterações)
+        item_selecionado = self.categorias_listbox.currentItem()
+        if not item_selecionado:
+            QMessageBox.warning(self, "Erro", "Selecione uma categoria para remover.")
+            return
+        nome_cat = item_selecionado.text()
+        confirm = QMessageBox.question(self, "Confirmar Remoção",
+                                       f"Tem certeza que deseja remover a categoria '{nome_cat}'?\n"
+                                       "TODOS os pilotos, resultados e sorteios associados a ela serão permanentemente excluídos.",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if confirm == QMessageBox.StandardButton.Yes:
+            try:
+                cursor.execute("SELECT id FROM categorias WHERE nome = ?", (nome_cat,))
+                categoria_id = cursor.fetchone()[0]
+                cursor.execute("DELETE FROM pilotos_categorias WHERE categoria_id = ?", (categoria_id,))
+                cursor.execute("DELETE FROM resultados_etapas WHERE categoria_id = ?", (categoria_id,))
+                cursor.execute("DELETE FROM historico_sorteios WHERE categoria_id = ?", (categoria_id,))
+                cursor.execute("DELETE FROM categorias WHERE id = ?", (categoria_id,))
+                conn.commit()
+                QMessageBox.information(self, "Sucesso", "Categoria e dados relacionados foram removidos com sucesso!")
+                self.atualizar_lista()
+            except Exception as e:
+                QMessageBox.critical(self, "Erro", f"Erro ao remover categoria: {e}")
+
+
+# --- Diálogo para Editar Piloto ---
+
+class EditarPilotoDialog(QDialog):
+    # ... (código interno sem alterações)
+    def __init__(self, nome_piloto, parent=None):
+        super().__init__(parent)
+        self.parent_widget = parent
+        self.nome_piloto_original = nome_piloto
+        self.piloto_id = self.get_piloto_id(nome_piloto)
+        self.setWindowTitle(f"Editar Piloto - {nome_piloto}")
+        self.setMinimumWidth(400)
+        self.init_ui()
+        self.carregar_dados_piloto()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Nome do Piloto:"))
+        self.entry_nome = QLineEdit()
+        layout.addWidget(self.entry_nome)
+        layout.addWidget(QLabel("Time (opcional):"))
+        self.combo_time = QComboBox()
+        layout.addWidget(self.combo_time)
+        group_box = QGroupBox("Categorias")
+        self.categorias_layout = QVBoxLayout()
+        group_box.setLayout(self.categorias_layout)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(group_box)
+        layout.addWidget(scroll_area)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_piloto_id(self, nome):
+        cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def carregar_dados_piloto(self):
+        self.entry_nome.setText(self.nome_piloto_original)
+        self.combo_time.addItem("")
+        cursor.execute("SELECT nome FROM times ORDER BY nome")
+        for time in cursor.fetchall(): self.combo_time.addItem(time[0])
+        cursor.execute("SELECT t.nome FROM times t JOIN pilotos_times pt ON t.id = pt.time_id WHERE pt.piloto_id = ?",
+                       (self.piloto_id,))
+        time_piloto = cursor.fetchone()
+        if time_piloto: self.combo_time.setCurrentText(time_piloto[0])
+        self.categoria_checkboxes = []
+        cursor.execute("SELECT id, nome FROM categorias ORDER BY nome")
+        todas_categorias = cursor.fetchall()
+        cursor.execute("SELECT categoria_id FROM pilotos_categorias WHERE piloto_id = ?", (self.piloto_id,))
+        categorias_piloto = {row[0] for row in cursor.fetchall()}
+        for cat_id, cat_nome in todas_categorias:
+            checkbox = QCheckBox(cat_nome)
+            if cat_id in categorias_piloto: checkbox.setChecked(True)
+            self.categorias_layout.addWidget(checkbox)
+            self.categoria_checkboxes.append((checkbox, cat_id))
+
+    def accept(self):
+        novo_nome = self.entry_nome.text().strip()
+        time_nome = self.combo_time.currentText()
+        cat_selecionadas = [cat_id for cb, cat_id in self.categoria_checkboxes if cb.isChecked()]
+        if not novo_nome or not cat_selecionadas:
+            QMessageBox.warning(self, "Erro", "Nome e pelo menos uma categoria são obrigatórios.")
             return
         try:
-            cursor.execute("SELECT id FROM categorias WHERE nome = ?", (selecionado,))
-            categoria = cursor.fetchone()
-            if not categoria:
-                messagebox.showerror("Erro", "Categoria selecionada inválida.")
+            cursor.execute("SELECT id FROM pilotos WHERE LOWER(nome) = ? AND id != ?",
+                           (novo_nome.lower(), self.piloto_id))
+            if cursor.fetchone():
+                QMessageBox.warning(self, "Erro", "Já existe outro piloto com esse nome.")
                 return
-            categoria_id = categoria[0]
+            cursor.execute("UPDATE pilotos SET nome = ? WHERE id = ?", (novo_nome, self.piloto_id))
+            cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (self.piloto_id,))
+            for cat_id in cat_selecionadas: cursor.execute(
+                "INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)", (self.piloto_id, cat_id))
+            cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (self.piloto_id,))
+            if time_nome:
+                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
+                time_id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
+                               (self.piloto_id, time_id))
+            conn.commit()
+            super().accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro de Banco de Dados", f"Erro ao atualizar piloto: {e}")
 
-            # Remover pilotos associados à categoria
-            cursor.execute("DELETE FROM pilotos_categorias WHERE categoria_id = ?", (categoria_id,))
 
-            # Remover resultados associados à categoria
-            cursor.execute("DELETE FROM resultados_etapas WHERE categoria_id = ?", (categoria_id,))
+# ***** NOVO DIÁLOGO PARA RESOLVER CONFLITOS *****
 
-            # Remover sorteios associados à categoria
-            cursor.execute("DELETE FROM historico_sorteios WHERE categoria_id = ?", (categoria_id,))
+class ResolverConflitoDialog(QDialog):
+    def __init__(self, piloto1, piloto2, etapa_id, parent=None):
+        super().__init__(parent)
+        self.piloto1_id = piloto1['id']
+        self.piloto2_id = piloto2['id']
+        self.etapa_id = etapa_id
 
-            # Remover a categoria
-            cursor.execute("DELETE FROM categorias WHERE id = ?", (categoria_id,))
+        # Busca dados do BD antes de criar a UI
+        self.resultado1 = self.get_resultado(self.piloto1_id)
+        self.resultado2 = self.get_resultado(self.piloto2_id)
+        etapa_nome = self.get_etapa_nome()
+
+        self.setWindowTitle("Resolver Conflito de Unificação")
+        self.setMinimumWidth(600)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(QLabel(f"<b>Conflito na Etapa: {etapa_nome}</b><br>"
+                                     "Ambos os pilotos têm um resultado para esta etapa. "
+                                     "Para continuar a unificação, por favor, edite e/ou exclua um dos resultados abaixo."))
+
+        # Layout para os dois resultados lado a lado
+        h_layout = QHBoxLayout()
+        self.group1 = self.criar_grupo_resultado(piloto1['nome'], self.resultado1, self.excluir_resultado1)
+        self.group2 = self.criar_grupo_resultado(piloto2['nome'], self.resultado2, self.excluir_resultado2)
+        h_layout.addWidget(self.group1)
+        h_layout.addWidget(self.group2)
+        main_layout.addLayout(h_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        button_box.button(QDialogButtonBox.StandardButton.Save).setText("Resolver e Salvar")
+        button_box.accepted.connect(self.salvar_resolucao)
+        button_box.rejected.connect(self.reject)
+        main_layout.addWidget(button_box)
+
+    def get_etapa_nome(self):
+        cursor.execute("SELECT nome FROM etapas WHERE id = ?", (self.etapa_id,))
+        return cursor.fetchone()[0]
+
+    def get_resultado(self, piloto_id):
+        cursor.execute("SELECT * FROM resultados_etapas WHERE piloto_id = ? AND etapa_id = ?",
+                       (piloto_id, self.etapa_id))
+        colunas = [d[0] for d in cursor.description]
+        return dict(zip(colunas, cursor.fetchone()))
+
+    def criar_grupo_resultado(self, nome_piloto, resultado_data, on_delete):
+        group_box = QGroupBox(nome_piloto.title())
+        layout = QVBoxLayout(group_box)
+
+        # Guardar os widgets para ler os valores depois
+        widgets = {}
+
+        layout.addWidget(QLabel("Posição:"))
+        widgets['posicao'] = QLineEdit(str(resultado_data['posicao']))
+        widgets['posicao'].setValidator(QIntValidator(1, 99))
+        layout.addWidget(widgets['posicao'])
+
+        widgets['pole'] = QCheckBox("Pole Position")
+        widgets['pole'].setChecked(bool(resultado_data['pole_position']))
+        layout.addWidget(widgets['pole'])
+
+        widgets['melhor_volta'] = QCheckBox("Melhor Volta")
+        widgets['melhor_volta'].setChecked(bool(resultado_data['melhor_volta']))
+        layout.addWidget(widgets['melhor_volta'])
+
+        widgets['adv'] = QCheckBox("ADV")
+        widgets['adv'].setChecked(bool(resultado_data['adv']))
+        layout.addWidget(widgets['adv'])
+
+        btn_excluir = QPushButton("Excluir este Resultado")
+        btn_excluir.setStyleSheet("background-color: #e74c3c;")
+        btn_excluir.clicked.connect(on_delete)
+        layout.addWidget(btn_excluir)
+
+        group_box.setProperty("widgets", widgets)
+        return group_box
+
+    def excluir_resultado1(self):
+        self.resolver("excluir_1")
+
+    def excluir_resultado2(self):
+        self.resolver("excluir_2")
+
+    def salvar_resolucao(self):
+        self.resolver("salvar_ambos")
+
+    def resolver(self, acao):
+        try:
+            # Opção 1: Excluir resultado 1
+            if acao == "excluir_1":
+                cursor.execute("DELETE FROM resultados_etapas WHERE id = ?", (self.resultado1['id'],))
+
+            # Opção 2: Excluir resultado 2
+            elif acao == "excluir_2":
+                cursor.execute("DELETE FROM resultados_etapas WHERE id = ?", (self.resultado2['id'],))
+
+            # Opção 3: Salvar alterações em ambos (se um não foi excluído)
+            elif acao == "salvar_ambos":
+                # Salva dados do piloto 1
+                widgets1 = self.group1.property("widgets")
+                cursor.execute("""
+                    UPDATE resultados_etapas SET posicao=?, pole_position=?, melhor_volta=?, adv=? WHERE id=?
+                """, (int(widgets1['posicao'].text()), widgets1['pole'].isChecked(),
+                      widgets1['melhor_volta'].isChecked(), widgets1['adv'].isChecked(), self.resultado1['id']))
+
+                # Salva dados do piloto 2
+                widgets2 = self.group2.property("widgets")
+                cursor.execute("""
+                    UPDATE resultados_etapas SET posicao=?, pole_position=?, melhor_volta=?, adv=? WHERE id=?
+                """, (int(widgets2['posicao'].text()), widgets2['pole'].isChecked(),
+                      widgets2['melhor_volta'].isChecked(), widgets2['adv'].isChecked(), self.resultado2['id']))
+
+                QMessageBox.information(self, "Sucesso",
+                                        "Alterações salvas. Agora, exclua um dos resultados para prosseguir com a unificação.")
+                return  # Não fecha o diálogo, força o usuário a excluir um
 
             conn.commit()
+            QMessageBox.information(self, "Sucesso", "Conflito resolvido!")
+            self.accept()
 
-            messagebox.showinfo("Sucesso", "Categoria e todas as informações relacionadas foram removidas com sucesso!")
-            self.atualizar_lista()
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao remover categoria: {e}")
+            QMessageBox.critical(self, "Erro", f"Não foi possível resolver o conflito: {e}")
 
 
-class CadastroPilotosFrame(ctk.CTkFrame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack(fill="both", expand=True, padx=20, pady=20)
+# --- Widget para Cadastro de Pilotos ---
 
-        # Título
-        self.label = ctk.CTkLabel(self, text="Cadastro de Pilotos", font=ctk.CTkFont(size=20, weight="bold"))
-        self.label.pack(pady=10)
-
-        # Campo para Nome do Piloto
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=10)
-
-        # Seleção de Times
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=5)
-
-        self.times = self.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Seleção de Categorias
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione Categorias")
-        self.label_categoria.pack(pady=5)
-
-        self.categorias = self.get_categorias()
-        if not self.categorias:
-            messagebox.showwarning("Aviso", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
-
-        self.categoria_vars = []
-        self.categoria_checkboxes = []
-        for categoria in self.categorias:
-            var = ctk.BooleanVar()
-            cb = ctk.CTkCheckBox(self, text=categoria[1], variable=var)
-            cb.pack(anchor='w')
-            self.categoria_vars.append((var, categoria[0]))
-            self.categoria_checkboxes.append(cb)
-
-        # Botão para Salvar Piloto
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Piloto", command=self.salvar_piloto)
-        self.btn_salvar.pack(pady=20)
-
-        # Exibir Pilotos Cadastrados
-        self.label_lista_pilotos = ctk.CTkLabel(self, text="Pilotos Cadastrados",
-                                                font=ctk.CTkFont(size=16, weight="bold"))
-        self.label_lista_pilotos.pack(pady=10)
-
-        self.tree = ttk.Treeview(self, columns=("Nome", "Categorias", "Time"), show="headings", selectmode="extended")
-        self.tree.heading("Nome", text="Nome")
-        self.tree.heading("Categorias", text="Categorias")
-        self.tree.heading("Time", text="Time")
-        self.tree.pack(fill="both", expand=True, pady=10)
-
-        # Adicionar scrollbar à Treeview
-        self.scrollbar_tree = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=self.scrollbar_tree.set)
-        self.scrollbar_tree.pack(side='right', fill='y')
-
-        # Carregar lista de pilotos cadastrados
-        self.carregar_pilotos()
-
-        # Verificar nomes semelhantes após carregar pilotos
+class CadastroPilotosWidget(QWidget):
+    # ... (init_ui, capitalizar_nome, refresh_data, salvar_piloto, editar_piloto, remover_piloto, unir_pilotos
+    # e verificar_nomes_parecidos não foram alterados, mas estão incluídos para a substituição do arquivo)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+        self.refresh_data()
         self.verificar_nomes_parecidos()
 
-        # Botão para Editar Piloto
-        self.btn_editar_piloto = ctk.CTkButton(self, text="Editar Piloto", command=self.editar_piloto)
-        self.btn_editar_piloto.pack(pady=10)
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        label_titulo = QLabel("Cadastro de Pilotos")
+        label_titulo.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        label_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(label_titulo)
+        h_layout = QHBoxLayout()
+        form_container = QWidget()
+        form_layout = QVBoxLayout(form_container)
+        form_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        form_layout.addWidget(QLabel("Nome do Piloto:"))
+        self.entry_nome_piloto = QLineEdit()
+        form_layout.addWidget(self.entry_nome_piloto)
+        form_layout.addWidget(QLabel("Time (opcional):"))
+        self.combo_time_piloto = QComboBox()
+        form_layout.addWidget(self.combo_time_piloto)
+        group_box_cat = QGroupBox("Categorias")
+        self.categorias_layout_piloto = QVBoxLayout()
+        group_box_cat.setLayout(self.categorias_layout_piloto)
+        scroll_area_cat = QScrollArea()
+        scroll_area_cat.setWidgetResizable(True)
+        scroll_area_cat.setWidget(group_box_cat)
+        form_layout.addWidget(scroll_area_cat)
+        btn_salvar_piloto = QPushButton("Salvar Novo Piloto")
+        form_layout.addWidget(btn_salvar_piloto)
+        btn_recarregar = QPushButton("Recarregar Listas")
+        form_layout.addWidget(btn_recarregar)
+        h_layout.addWidget(form_container, 1)
+        table_container = QWidget()
+        table_layout = QVBoxLayout(table_container)
+        self.table_pilotos = QTableWidget()
+        self.table_pilotos.setColumnCount(3)
+        self.table_pilotos.setHorizontalHeaderLabels(["Nome", "Categorias", "Time"])
+        self.table_pilotos.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table_pilotos.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table_pilotos.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_pilotos.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table_pilotos.verticalHeader().setVisible(False)
+        self.table_pilotos.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        table_layout.addWidget(self.table_pilotos)
+        botoes_acao_layout = QHBoxLayout()
+        btn_editar_piloto = QPushButton("Editar")
+        btn_remover_piloto = QPushButton("Remover")
+        btn_unir_pilotos = QPushButton("Unir 2 Pilotos")
+        botoes_acao_layout.addStretch()
+        botoes_acao_layout.addWidget(btn_editar_piloto)
+        botoes_acao_layout.addWidget(btn_remover_piloto)
+        botoes_acao_layout.addWidget(btn_unir_pilotos)
+        table_layout.addLayout(botoes_acao_layout)
+        h_layout.addWidget(table_container, 2)
+        main_layout.addLayout(h_layout)
+        btn_salvar_piloto.clicked.connect(self.salvar_piloto)
+        btn_editar_piloto.clicked.connect(self.editar_piloto)
+        btn_remover_piloto.clicked.connect(self.remover_piloto)
+        btn_unir_pilotos.clicked.connect(self.unir_pilotos)
+        btn_recarregar.clicked.connect(self.refresh_data)
 
-        # Botão para Remover Piloto
-        self.btn_remover_piloto = ctk.CTkButton(self, text="Remover Piloto", command=self.remover_piloto)
-        self.btn_remover_piloto.pack(pady=10)
+    def capitalizar_nome(self, nome):
+        return ' '.join(word.capitalize() for word in nome.split())
 
-        # Botão para Unir Pilotos
-        self.btn_unir_pilotos = ctk.CTkButton(self, text="Unir Pilotos", command=self.unir_pilotos)
-        self.btn_unir_pilotos.pack(pady=10)
-
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
-
-    def carregar_pilotos(self):
-        # Limpar a Treeview
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        # Atualizar as colunas da Treeview para incluir a coluna de Times
-        self.tree.config(columns=("Nome", "Categorias", "Time"))
-        self.tree.heading("Nome", text="Nome")
-        self.tree.heading("Categorias", text="Categorias")
-        self.tree.heading("Time", text="Time")
-
-        # Buscar pilotos cadastrados e incluir o time
-        cursor.execute('''
+    def refresh_data(self):
+        self.table_pilotos.setRowCount(0)
+        query = """
             SELECT p.nome, GROUP_CONCAT(c.nome, ', '), t.nome
             FROM pilotos p
             LEFT JOIN pilotos_categorias pc ON p.id = pc.piloto_id
             LEFT JOIN categorias c ON pc.categoria_id = c.id
             LEFT JOIN pilotos_times pt ON p.id = pt.piloto_id
             LEFT JOIN times t ON pt.time_id = t.id
-            GROUP BY p.nome, t.nome
-            ORDER BY p.nome ASC
-        ''')
-        pilotos = cursor.fetchall()
-
-        # Inserir pilotos na Treeview
-        for piloto in pilotos:
-            nome, categorias, time = piloto
-            # Se time é None, deixar a coluna em branco
-            time_display = time if time else ""
-            self.tree.insert("", "end", values=(nome, categorias, time_display))
+            GROUP BY p.id ORDER BY p.nome ASC
+        """
+        try:
+            for row_num, row_data in enumerate(cursor.execute(query)):
+                nome, categorias, time = row_data
+                self.table_pilotos.insertRow(row_num)
+                self.table_pilotos.setItem(row_num, 0, QTableWidgetItem(nome))
+                self.table_pilotos.setItem(row_num, 1, QTableWidgetItem(categorias or ""))
+                self.table_pilotos.setItem(row_num, 2, QTableWidgetItem(time or ""))
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao carregar pilotos: {e}")
+        while self.categorias_layout_piloto.count():
+            child = self.categorias_layout_piloto.takeAt(0)
+            if child.widget(): child.widget().deleteLater()
+        self.combo_time_piloto.clear()
+        self.combo_time_piloto.addItem("")
+        cursor.execute("SELECT nome FROM times ORDER BY nome")
+        for time in cursor.fetchall(): self.combo_time_piloto.addItem(time[0])
+        self.categoria_checkboxes_cadastro = []
+        cursor.execute("SELECT id, nome FROM categorias ORDER BY nome")
+        for cat_id, cat_nome in cursor.fetchall():
+            cb = QCheckBox(cat_nome)
+            self.categorias_layout_piloto.addWidget(cb)
+            self.categoria_checkboxes_cadastro.append((cb, cat_id))
 
     def salvar_piloto(self):
-        nome = self.entry_nome.get().strip()
-        time_nome = self.time_var.get()  # Time selecionado
-        if not nome:
-            messagebox.showerror("Erro", "O nome do piloto é obrigatório.")
+        nome = self.entry_nome_piloto.text().strip()
+        time_nome = self.combo_time_piloto.currentText()
+        cat_selecionadas = [cat_id for cb, cat_id in self.categoria_checkboxes_cadastro if cb.isChecked()]
+        if not nome or not cat_selecionadas:
+            QMessageBox.warning(self, "Erro", "Nome e ao menos uma categoria são obrigatórios.")
             return
-
-        # Capitalizar o nome corretamente
         nome_capitalizado = self.capitalizar_nome(nome)
-
-        categorias_selecionadas = [cat_id for var, cat_id in self.categoria_vars if var.get()]
-        if not categorias_selecionadas:
-            messagebox.showerror("Erro", "Selecione pelo menos uma categoria.")
-            return
-
         try:
-            # Verificar se o piloto já existe
             cursor.execute("SELECT id FROM pilotos WHERE LOWER(nome) = ?", (nome.lower(),))
-            piloto = cursor.fetchone()
-
-            if piloto:
-                piloto_id = piloto[0]
-                messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
+            if cursor.fetchone():
+                QMessageBox.warning(self, "Erro", "Já existe um piloto com esse nome.")
                 return
-            else:
-                # Inserir novo piloto
-                cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome_capitalizado,))
-                piloto_id = cursor.lastrowid
-
-                # Inserir categorias do piloto
-                for cat_id in categorias_selecionadas:
-                    cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                                   (piloto_id, cat_id))
-
-                # Se um time foi selecionado, associá-lo ao piloto
-                if time_nome:
-                    cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                    time = cursor.fetchone()
-                    if time:
-                        time_id = time[0]
-                        # Verificar se o piloto já tem time
-                        cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                        piloto_time_existente = cursor.fetchone()
-
-                        if piloto_time_existente:
-                            # Atualizar time existente
-                            cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                           (time_id, piloto_id))
-                        else:
-                            # Associar o novo time
-                            cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                           (piloto_id, time_id))
-                # Se nenhum time for selecionado, garantir que não haja associação
-                else:
-                    # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                    cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-
+            cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome_capitalizado,))
+            piloto_id = cursor.lastrowid
+            for cat_id in cat_selecionadas:
+                cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
+                               (piloto_id, cat_id))
+            if time_nome:
+                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
+                time_id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)", (piloto_id, time_id))
             conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto cadastrado com sucesso!")
-            self.entry_nome.delete(0, 'end')
-            for var, _ in self.categoria_vars:
-                var.set(False)
-            self.dropdown_time.set("")  # Resetar para vazio
-            self.carregar_pilotos()  # Recarregar a lista de pilotos
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Piloto já está associado a esta categoria.")
+            QMessageBox.information(self, "Sucesso", "Piloto cadastrado com sucesso!")
+            self.entry_nome_piloto.clear()
+            self.refresh_data()
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar piloto: {e}")
+            QMessageBox.critical(self, "Erro", f"Erro ao salvar piloto: {e}")
 
     def editar_piloto(self):
-        # Verificar se algum item foi selecionado
-        selecionados = self.tree.selection()
-        if len(selecionados) != 1:
-            messagebox.showerror("Erro", "Selecione exatamente um piloto para editar.")
+        selected_rows = self.table_pilotos.selectionModel().selectedRows()
+        if len(selected_rows) != 1:
+            QMessageBox.warning(self, "Seleção Inválida", "Selecione exatamente um piloto para editar.")
             return
-
-        # Obter valores do piloto selecionado
-        valores = self.tree.item(selecionados[0], 'values')
-        nome_piloto = valores[0]
-
-        # Abrir janela para editar o piloto
-        EditarPilotoWindow(self, nome_piloto)
-
-    def capitalizar_nome(self, nome):
-        # Capitaliza corretamente o nome (primeira letra maiúscula de cada palavra)
-        return ' '.join(word.capitalize() for word in nome.split())
-
-    def verificar_nomes_parecidos(self):
-        # Obter lista de nomes de pilotos
-        cursor.execute("SELECT nome FROM pilotos")
-        nomes = [row[0] for row in cursor.fetchall()]
-
-        nomes_lower = [nome.lower() for nome in nomes]
-        nomes_dict = {nome.lower(): nome for nome in nomes}  # Map lowercased to original
-
-        # Usar difflib para encontrar nomes semelhantes
-        similar_pairs = []
-        for i in range(len(nomes_lower)):
-            nome1 = nomes_lower[i]
-            nome_original1 = nomes_dict[nome1]
-            matches = difflib.get_close_matches(nome1, nomes_lower, n=5, cutoff=0.8)
-            for nome2 in matches:
-                if nome1 == nome2:
-                    continue
-                # Ordenar os nomes para evitar duplicatas
-                pair = tuple(sorted([nome_original1, nomes_dict[nome2]]))
-                if pair not in similar_pairs:
-                    similar_pairs.append(pair)
-
-        # Remover duplicatas
-        unique_pairs = []
-        seen = set()
-        for pair in similar_pairs:
-            if pair not in seen:
-                unique_pairs.append(pair)
-                seen.add(pair)
-
-        # Para cada par semelhante, perguntar ao usuário se deseja unificar
-        for pair in unique_pairs:
-            piloto1, piloto2 = pair
-            response = messagebox.askyesno("Nomes Semelhantes Detectados",
-                                           f"Os pilotos '{piloto1}' e '{piloto2}' têm nomes semelhantes.\n\nDeseja unificá-los?")
-            if response:
-                # Perguntar pelo novo nome unificado
-                novo_nome = simpledialog.askstring("Unificar Pilotos",
-                                                   f"Unificar '{piloto1}' e '{piloto2}'.\n\nDigite o novo nome para o piloto unificado:")
-                if novo_nome:
-                    # Unificar os pilotos
-                    self.unificar_pilotos(piloto1, piloto2, novo_nome)
-            # Se não, continuar
-
-    def unir_pilotos(self):
-        # Obter pilotos selecionados na Treeview
-        selecionados = self.tree.selection()
-        if len(selecionados) != 2:
-            messagebox.showerror("Erro", "Selecione exatamente dois pilotos para unir.")
-            return
-
-        # Coletar os IDs e nomes dos pilotos selecionados
-        pilotos_selecionados = []
-        for sel in selecionados:
-            nome_piloto = self.tree.item(sel, 'values')[0]
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_piloto,))
-            piloto = cursor.fetchone()
-            if piloto:
-                pilotos_selecionados.append((piloto[0], nome_piloto))
-
-        # Verificar se encontrou os dois pilotos
-        if len(pilotos_selecionados) != 2:
-            messagebox.showerror("Erro", "Ocorreu um erro ao obter os pilotos selecionados.")
-            return
-
-        # Perguntar ao usuário para confirmar o novo nome unificado
-        nomes = [p[1] for p in pilotos_selecionados]
-        novo_nome = simpledialog.askstring("Unir Pilotos",
-                                           f"Os pilotos selecionados serão unificados.\nNomes: {', '.join(nomes)}\n\nDigite o novo nome para o piloto unificado:")
-        if not novo_nome:
-            return
-
-        # Unificar pilotos
-        self.unificar_pilotos(pilotos_selecionados[0][1], pilotos_selecionados[1][1], novo_nome)
-
-    def unificar_pilotos(self, piloto1_nome, piloto2_nome, novo_nome):
-        try:
-            # Buscar IDs dos pilotos
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (piloto1_nome,))
-            piloto1 = cursor.fetchone()
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (piloto2_nome,))
-            piloto2 = cursor.fetchone()
-
-            if not piloto1 or not piloto2:
-                messagebox.showerror("Erro", "Um ou ambos os pilotos não foram encontrados.")
-                return
-
-            piloto1_id, piloto2_id = piloto1[0], piloto2[0]
-
-            # Transferir resultados do segundo piloto para o primeiro piloto, verificando duplicatas
-            cursor.execute("SELECT * FROM resultados_etapas WHERE piloto_id = ?", (piloto2_id,))
-            resultados_piloto2 = cursor.fetchall()
-            for resultado in resultados_piloto2:
-                etapa_id = resultado[1]  # etapa_id
-                categoria_id = resultado[3]  # categoria_id
-
-                # Verificar se já existe um resultado para o piloto1 na mesma etapa e categoria
-                cursor.execute('''SELECT * FROM resultados_etapas
-                                  WHERE etapa_id = ? AND piloto_id = ? AND categoria_id = ?''',
-                               (etapa_id, piloto1_id, categoria_id))
-                resultado_existente = cursor.fetchone()
-
-                if not resultado_existente:
-                    # Se não houver conflito, transferir o resultado
-                    cursor.execute('''UPDATE resultados_etapas
-                                      SET piloto_id = ?
-                                      WHERE piloto_id = ? AND etapa_id = ? AND categoria_id = ?''',
-                                   (piloto1_id, piloto2_id, etapa_id, categoria_id))
-                else:
-                    # Se já houver um resultado, decidir como proceder (manter ou descartar duplicado)
-                    # Neste caso, vamos ignorar o resultado duplicado do piloto2
-                    continue
-
-            # Transferir categorias do segundo piloto para o primeiro piloto
-            cursor.execute("SELECT categoria_id FROM pilotos_categorias WHERE piloto_id = ?", (piloto2_id,))
-            categorias_piloto2 = cursor.fetchall()
-            for categoria in categorias_piloto2:
-                categoria_id = categoria[0]
-                # Verificar se o piloto1 já está nessa categoria para evitar duplicatas
-                cursor.execute("SELECT 1 FROM pilotos_categorias WHERE piloto_id = ? AND categoria_id = ?",
-                               (piloto1_id, categoria_id))
-                if not cursor.fetchone():
-                    cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                                   (piloto1_id, categoria_id))
-
-            # Transferir time do segundo piloto para o primeiro piloto, se existir
-            cursor.execute("SELECT time_id FROM pilotos_times WHERE piloto_id = ?", (piloto2_id,))
-            time_piloto2 = cursor.fetchone()
-            if time_piloto2:
-                time_id = time_piloto2[0]
-                # Verificar se o piloto1 já tem um time
-                cursor.execute("SELECT time_id FROM pilotos_times WHERE piloto_id = ?", (piloto1_id,))
-                time_piloto1 = cursor.fetchone()
-                if time_piloto1:
-                    # Atualizar time do piloto1 para o time do piloto2
-                    cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                   (time_id, piloto1_id))
-                else:
-                    # Associar o time do piloto2 ao piloto1
-                    cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                   (piloto1_id, time_id))
-
-            # Atualizar o nome do piloto principal para o novo nome unificado
-            novo_nome_capitalizado = self.capitalizar_nome(novo_nome)
-            cursor.execute("UPDATE pilotos SET nome = ? WHERE id = ?", (novo_nome_capitalizado, piloto1_id))
-
-            # Remover o segundo piloto
-            cursor.execute("DELETE FROM pilotos WHERE id = ?", (piloto2_id,))
-
-            conn.commit()
-            messagebox.showinfo("Sucesso",
-                                f"Pilotos '{piloto1_nome}' e '{piloto2_nome}' unificados como '{novo_nome_capitalizado}'.")
-            self.carregar_pilotos()  # Atualizar a lista de pilotos
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao unificar pilotos: {e}")
+        nome_piloto = self.table_pilotos.item(selected_rows[0].row(), 0).text()
+        dialog = EditarPilotoDialog(nome_piloto, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            QMessageBox.information(self, "Sucesso", "Piloto atualizado com sucesso!")
+            self.refresh_data()
 
     def remover_piloto(self):
-        # Verificar se algum piloto foi selecionado
-        selecionados = self.tree.selection()
-        if not selecionados:
-            messagebox.showerror("Erro", "Selecione um ou mais pilotos para remover.")
+        selected_rows = self.table_pilotos.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "Seleção Inválida", "Selecione um ou mais pilotos para remover.")
             return
-
-        # Obter os nomes dos pilotos selecionados
-        nomes_pilotos = [self.tree.item(sel, 'values')[0] for sel in selecionados]
-
-        # Confirmar a remoção
-        if messagebox.askyesno("Remover Pilotos", f"Tem certeza que deseja remover os pilotos: {', '.join(nomes_pilotos)}?"):
+        nomes = [self.table_pilotos.item(row.row(), 0).text() for row in selected_rows]
+        if QMessageBox.question(self, "Confirmar",
+                                f"Tem certeza que quer remover os pilotos: {', '.join(nomes)}?") == QMessageBox.StandardButton.Yes:
             try:
-                for nome_piloto in nomes_pilotos:
-                    # Buscar o piloto pelo nome
-                    cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_piloto,))
-                    piloto = cursor.fetchone()
-                    if not piloto:
-                        messagebox.showerror("Erro", f"Piloto '{nome_piloto}' não encontrado.")
-                        continue
-                    piloto_id = piloto[0]
-
-                    # Remover o piloto da tabela pilotos e das tabelas relacionadas (pilotos_categorias, pilotos_times)
+                for nome in nomes:
+                    cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
+                    piloto_id = cursor.fetchone()[0]
                     cursor.execute("DELETE FROM pilotos WHERE id = ?", (piloto_id,))
-                    cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (piloto_id,))
-                    cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    # Opcional: Remover também resultados nas etapas, se necessário
-                    cursor.execute("DELETE FROM resultados_etapas WHERE piloto_id = ?", (piloto_id,))
-
                 conn.commit()
-                messagebox.showinfo("Sucesso", "Pilotos removidos com sucesso!")
-                self.carregar_pilotos()  # Atualizar a lista de pilotos
+                QMessageBox.information(self, "Sucesso", "Pilotos removidos!")
+                self.refresh_data()
             except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao remover pilotos: {e}")
+                QMessageBox.critical(self, "Erro", f"Erro ao remover pilotos: {e}")
 
-
-class EditarPilotoWindow(ctk.CTkToplevel):
-    def __init__(self, parent, nome_piloto):
-        super().__init__(parent)
-        self.title(f"Editar Piloto - {nome_piloto}")
-        self.geometry("500x600")
-        self.parent = parent
-        self.nome_piloto = nome_piloto
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=10)
-        self.entry_nome.insert(0, nome_piloto)
-
-        # Seleção de Categorias
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione Categorias")
-        self.label_categoria.pack(pady=5)
-
-        self.categorias = parent.get_categorias()
-        self.categoria_vars = []
-        self.categoria_checkboxes = []
-        # Buscar categorias atuais do piloto
-        cursor.execute("""
-            SELECT categoria_id FROM pilotos_categorias 
-            WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)
-            """, (nome_piloto,))
-        categorias_piloto = cursor.fetchall()
-        categorias_piloto_ids = [cat[0] for cat in categorias_piloto]
-
-        for categoria in self.categorias:
-            var = ctk.BooleanVar()
-            if categoria[0] in categorias_piloto_ids:
-                var.set(True)
-            cb = ctk.CTkCheckBox(self, text=categoria[1], variable=var)
-            cb.pack(anchor='w')
-            self.categoria_vars.append((var, categoria[0]))
-            self.categoria_checkboxes.append(cb)
-
-        # Seleção de Time
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = parent.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Carregar o time atual do piloto
-        cursor.execute("SELECT time_id FROM pilotos_times WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)", (nome_piloto,))
-        time_piloto = cursor.fetchone()
-        if time_piloto:
-            time_id = time_piloto[0]
-            cursor.execute("SELECT nome FROM times WHERE id = ?", (time_id,))
-            time_nome = cursor.fetchone()
-            if time_nome:
-                self.dropdown_time.set(time_nome[0])
-        else:
-            self.dropdown_time.set("")  # Deixar vazio se não tiver time
-
-        # Botão para Salvar Alterações
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Alterações", command=self.salvar_alteracoes)
-        self.btn_salvar.pack(pady=20)
-
-    def salvar_alteracoes(self):
-        novo_nome = self.entry_nome.get().strip()
-        if not novo_nome:
-            messagebox.showerror("Erro", "O nome do piloto é obrigatório.")
+    def unir_pilotos(self):
+        selected_rows = self.table_pilotos.selectionModel().selectedRows()
+        if len(selected_rows) != 2:
+            QMessageBox.warning(self, "Seleção Inválida", "Selecione exatamente dois pilotos para unir.")
             return
+        nome1 = self.table_pilotos.item(selected_rows[0].row(), 0).text()
+        nome2 = self.table_pilotos.item(selected_rows[1].row(), 0).text()
+        novo_nome, ok = QInputDialog.getText(self, "Unir Pilotos",
+                                             f"Unificando '{nome1}' e '{nome2}'.\nDigite o nome final:",
+                                             text=self.capitalizar_nome(nome1))
+        if ok and novo_nome.strip():
+            self.unificar_pilotos_logica(nome1, nome2, novo_nome.strip())
 
-        # Capitalizar o nome corretamente
-        novo_nome_capitalizado = self.parent.capitalizar_nome(novo_nome)
+    def verificar_nomes_parecidos(self):
+        cursor.execute("SELECT nome FROM pilotos")
+        nomes = [row[0] for row in cursor.fetchall()]
+        if len(nomes) < 2: return
+        processed_pairs = set()
+        for i, nome1 in enumerate(nomes):
+            matches = difflib.get_close_matches(nome1.lower(), [n.lower() for n in nomes[i + 1:]], n=5, cutoff=0.8)
+            if not matches: continue
+            # Find original case for matches
+            original_matches = [n for n in nomes[i + 1:] if n.lower() in matches]
+            for nome2 in original_matches:
+                pair = tuple(sorted((nome1, nome2)))
+                if pair in processed_pairs: continue
+                processed_pairs.add(pair)
+                if QMessageBox.question(self, "Nomes Semelhantes",
+                                        f"Os pilotos '{nome1}' e '{nome2}' têm nomes semelhantes.\nDeseja unificá-los?") == QMessageBox.StandardButton.Yes:
+                    novo_nome, ok = QInputDialog.getText(self, "Unir Pilotos", f"Digite o nome final:",
+                                                         text=self.capitalizar_nome(nome1))
+                    if ok and novo_nome.strip():
+                        self.unificar_pilotos_logica(nome1, nome2, novo_nome.strip())
+                        return  # Stop after one merge to avoid issues with changed list
 
-        categorias_selecionadas = [cat_id for var, cat_id in self.categoria_vars if var.get()]
-        if not categorias_selecionadas:
-            messagebox.showerror("Erro", "Selecione pelo menos uma categoria.")
-            return
-
-        time_nome = self.time_var.get()
-
+    # ***** LÓGICA DE UNIFICAÇÃO ATUALIZADA *****
+    def unificar_pilotos_logica(self, nome1, nome2, novo_nome):
         try:
-            # Verificar se o novo nome já existe (exceto o piloto atual)
-            cursor.execute("SELECT id FROM pilotos WHERE LOWER(nome) = ? AND nome != ?", (novo_nome.lower(), self.nome_piloto))
-            piloto_existente = cursor.fetchone()
-            if piloto_existente:
-                messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
+            # Obter IDs dos pilotos
+            cursor.execute("SELECT id FROM pilotos WHERE nome=?", (nome1,))
+            piloto1_res = cursor.fetchone()
+            cursor.execute("SELECT id FROM pilotos WHERE nome=?", (nome2,))
+            piloto2_res = cursor.fetchone()
+
+            if not piloto1_res or not piloto2_res:
+                QMessageBox.critical(self, "Erro", "Um dos pilotos não foi encontrado. A operação foi cancelada.")
                 return
 
-            # Atualizar o nome do piloto
-            cursor.execute("UPDATE pilotos SET nome = ? WHERE nome = ?", (novo_nome_capitalizado, self.nome_piloto))
+            id1, id2 = piloto1_res[0], piloto2_res[0]
+            piloto1 = {'id': id1, 'nome': nome1}
+            piloto2 = {'id': id2, 'nome': nome2}
 
-            # Atualizar as categorias do piloto
-            piloto_id = self.get_piloto_id(self.nome_piloto)
-            if piloto_id:
-                # Remover todas as categorias atuais
-                cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (piloto_id,))
-                # Adicionar as categorias selecionadas
-                for cat_id in categorias_selecionadas:
-                    cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                                   (piloto_id, cat_id))
+            # 1. Detectar conflitos antes de tentar a unificação
+            cursor.execute("""
+                SELECT etapa_id FROM resultados_etapas
+                WHERE piloto_id IN (?, ?)
+                GROUP BY etapa_id
+                HAVING COUNT(DISTINCT piloto_id) > 1
+            """, (id1, id2))
+            conflitos = cursor.fetchall()
 
-            # Atualizar a associação com o time
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
+            # 2. Se houver conflitos, abrir o diálogo de resolução para cada um
+            if conflitos:
+                for etapa_conflito_id, in conflitos:
+                    dialog = ResolverConflitoDialog(piloto1, piloto2, etapa_conflito_id, self)
+                    if dialog.exec() != QDialog.DialogCode.Accepted:
+                        QMessageBox.warning(self, "Cancelado",
+                                            "A unificação foi cancelada pelo usuário durante a resolução de conflitos.")
+                        return  # Aborta toda a operação de unificação
 
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
+            # 3. Se todos os conflitos foram resolvidos (ou não existiam), prosseguir com a unificação
+            # Mover associações de tabelas de id2 para id1
+            tabelas_associacao = {
+                "resultados_etapas": "piloto_id",
+                "pilotos_categorias": "piloto_id",
+                "pilotos_times": "piloto_id",
+                "historico_sorteios": "piloto_id",
+            }
+            for tabela, campo in tabelas_associacao.items():
+                # Usar INSERT OR IGNORE para pular duplicatas (ex: categorias) e UPDATE para o resto
+                if tabela == "pilotos_categorias":
+                    cursor.execute(f"SELECT categoria_id FROM pilotos_categorias WHERE piloto_id=?", (id2,))
+                    cats_piloto2 = cursor.fetchall()
+                    for cat_id, in cats_piloto2:
+                        cursor.execute(
+                            f"INSERT OR IGNORE INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?,?)",
+                            (id1, cat_id))
+                else:
+                    cursor.execute(f"UPDATE {tabela} SET {campo} = ? WHERE {campo} = ?", (id1, id2))
 
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto atualizado com sucesso!")
-            self.parent.carregar_pilotos()  # Atualizar a lista de pilotos na janela principal
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao atualizar piloto: {e}")
+            # Atualizar o nome do piloto principal
+            cursor.execute("UPDATE pilotos SET nome = ? WHERE id = ?", (self.capitalizar_nome(novo_nome), id1))
 
-    def get_piloto_id(self, nome_piloto):
-        cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_piloto,))
-        piloto = cursor.fetchone()
-        return piloto[0] if piloto else None
-
-
-class AdicionarPilotoManualWindow(ctk.CTkToplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        self.title("Adicionar Piloto Manualmente")
-        self.geometry("400x500")
-        self.transient(master)  # Sobrepõe a janela principal
-        self.grab_set()  # Modal
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=5)
-
-        # Campo para Selecionar Categoria
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
-        self.label_categoria.pack(pady=10)
-
-        self.categorias = self.get_categorias()
-        if not self.categorias:
-            messagebox.showerror("Erro", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
-            self.destroy()
-            return
-
-        self.categoria_var = StringVar()
-        self.dropdown_categoria = ctk.CTkComboBox(
-            self,
-            values=[cat[1] for cat in self.categorias],
-            variable=self.categoria_var
-        )
-        self.dropdown_categoria.pack(pady=5)
-
-        # Seleção de Time (opcional)
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = self.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Botão para Salvar Piloto
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Piloto", command=self.salvar_piloto)
-        self.btn_salvar.pack(pady=20)
-
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
-
-    def salvar_piloto(self):
-        nome = self.entry_nome.get().strip()
-        categoria_nome = self.categoria_var.get()
-        time_nome = self.time_var.get()
-
-        if not nome or not categoria_nome:
-            messagebox.showerror("Erro", "Todos os campos obrigatórios devem ser preenchidos.")
-            return
-
-        try:
-            cursor.execute("SELECT id FROM categorias WHERE nome = ?", (categoria_nome,))
-            categoria = cursor.fetchone()
-            if not categoria:
-                messagebox.showerror("Erro", "Categoria inválida.")
-                return
-            categoria_id = categoria[0]
-
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
-            piloto = cursor.fetchone()
-            if piloto:
-                piloto_id = piloto[0]
-            else:
-                cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome,))
-                piloto_id = cursor.lastrowid
-
-            cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                           (piloto_id, categoria_id))
-
-            # Se um time foi selecionado, associá-lo ao piloto
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
-
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            # Se nenhum time for selecionado, garantir que não haja associação
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
+            # Remover o segundo piloto (agora redundante e sem associações)
+            cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (id2,))
+            cursor.execute("DELETE FROM pilotos WHERE id = ?", (id2,))
 
             conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto cadastrado com sucesso!")
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Piloto já está associado a esta categoria.")
+            QMessageBox.information(self, "Sucesso", f"Pilotos '{nome1}' e '{nome2}' unificados como '{novo_nome}'.")
+            self.refresh_data()
+
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar piloto: {e}")
-
-
-class EditarPilotoWindow(ctk.CTkToplevel):
-    def __init__(self, parent, nome_piloto):
-        super().__init__(parent)
-        self.title(f"Editar Piloto - {nome_piloto}")
-        self.geometry("500x600")
-        self.parent = parent
-        self.nome_piloto = nome_piloto
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=10)
-        self.entry_nome.insert(0, nome_piloto)
-
-        # Seleção de Categorias
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione Categorias")
-        self.label_categoria.pack(pady=5)
-
-        self.categorias = parent.get_categorias()
-        self.categoria_vars = []
-        self.categoria_checkboxes = []
-        # Buscar categorias atuais do piloto
-        cursor.execute("""
-            SELECT categoria_id FROM pilotos_categorias 
-            WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)
-            """, (nome_piloto,))
-        categorias_piloto = cursor.fetchall()
-        categorias_piloto_ids = [cat[0] for cat in categorias_piloto]
-
-        for categoria in self.categorias:
-            var = ctk.BooleanVar()
-            if categoria[0] in categorias_piloto_ids:
-                var.set(True)
-            cb = ctk.CTkCheckBox(self, text=categoria[1], variable=var)
-            cb.pack(anchor='w')
-            self.categoria_vars.append((var, categoria[0]))
-            self.categoria_checkboxes.append(cb)
-
-        # Seleção de Time
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = parent.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Carregar o time atual do piloto
-        cursor.execute("SELECT time_id FROM pilotos_times WHERE piloto_id = (SELECT id FROM pilotos WHERE nome = ?)", (nome_piloto,))
-        time_piloto = cursor.fetchone()
-        if time_piloto:
-            time_id = time_piloto[0]
-            cursor.execute("SELECT nome FROM times WHERE id = ?", (time_id,))
-            time_nome = cursor.fetchone()
-            if time_nome:
-                self.dropdown_time.set(time_nome[0])
-        else:
-            self.dropdown_time.set("")  # Deixar vazio se não tiver time
-
-        # Botão para Salvar Alterações
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Alterações", command=self.salvar_alteracoes)
-        self.btn_salvar.pack(pady=20)
-
-    def salvar_alteracoes(self):
-        novo_nome = self.entry_nome.get().strip()
-        if not novo_nome:
-            messagebox.showerror("Erro", "O nome do piloto é obrigatório.")
-            return
-
-        # Capitalizar o nome corretamente
-        novo_nome_capitalizado = self.parent.capitalizar_nome(novo_nome)
-
-        categorias_selecionadas = [cat_id for var, cat_id in self.categoria_vars if var.get()]
-        if not categorias_selecionadas:
-            messagebox.showerror("Erro", "Selecione pelo menos uma categoria.")
-            return
-
-        time_nome = self.time_var.get()
-
-        try:
-            # Verificar se o novo nome já existe (exceto o piloto atual)
-            cursor.execute("SELECT id FROM pilotos WHERE LOWER(nome) = ? AND nome != ?", (novo_nome.lower(), self.nome_piloto))
-            piloto_existente = cursor.fetchone()
-            if piloto_existente:
-                messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
-                return
-
-            # Atualizar o nome do piloto
-            cursor.execute("UPDATE pilotos SET nome = ? WHERE nome = ?", (novo_nome_capitalizado, self.nome_piloto))
-
-            # Atualizar as categorias do piloto
-            piloto_id = self.get_piloto_id(self.nome_piloto)
-            if piloto_id:
-                # Remover todas as categorias atuais
-                cursor.execute("DELETE FROM pilotos_categorias WHERE piloto_id = ?", (piloto_id,))
-                # Adicionar as categorias selecionadas
-                for cat_id in categorias_selecionadas:
-                    cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                                   (piloto_id, cat_id))
-
-            # Atualizar a associação com o time
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
-
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto atualizado com sucesso!")
-            self.parent.carregar_pilotos()  # Atualizar a lista de pilotos na janela principal
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Já existe um piloto com esse nome.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao atualizar piloto: {e}")
-
-    def get_piloto_id(self, nome_piloto):
-        cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome_piloto,))
-        piloto = cursor.fetchone()
-        return piloto[0] if piloto else None
-
-
-class AdicionarPilotoManualWindow(ctk.CTkToplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        self.title("Adicionar Piloto Manualmente")
-        self.geometry("400x500")
-        self.transient(master)  # Sobrepõe a janela principal
-        self.grab_set()  # Modal
-
-        # Campo para Nome do Piloto
-        self.label_nome = ctk.CTkLabel(self, text="Nome do Piloto")
-        self.label_nome.pack(pady=10)
-
-        self.entry_nome = ctk.CTkEntry(self, placeholder_text="Nome do Piloto")
-        self.entry_nome.pack(pady=5)
-
-        # Campo para Selecionar Categoria
-        self.label_categoria = ctk.CTkLabel(self, text="Selecione a Categoria")
-        self.label_categoria.pack(pady=10)
-
-        self.categorias = self.get_categorias()
-        if not self.categorias:
-            messagebox.showerror("Erro", "Nenhuma categoria cadastrada. Por favor, cadastre uma categoria primeiro.")
-            self.destroy()
-            return
-
-        self.categoria_var = StringVar()
-        self.dropdown_categoria = ctk.CTkComboBox(
-            self,
-            values=[cat[1] for cat in self.categorias],
-            variable=self.categoria_var
-        )
-        self.dropdown_categoria.pack(pady=5)
-
-        # Seleção de Time (opcional)
-        self.label_time = ctk.CTkLabel(self, text="Selecione Time (opcional)")
-        self.label_time.pack(pady=10)
-
-        self.times = self.get_times()
-        self.time_var = StringVar()
-        time_values = [""] + [time[1] for time in self.times]  # Adiciona uma opção vazia
-        self.dropdown_time = ctk.CTkComboBox(self, values=time_values, variable=self.time_var)
-        self.dropdown_time.pack(pady=5)
-        self.dropdown_time.set("")  # Define como vazio por padrão
-
-        # Botão para Salvar Piloto
-        self.btn_salvar = ctk.CTkButton(self, text="Salvar Piloto", command=self.salvar_piloto)
-        self.btn_salvar.pack(pady=20)
-
-    def get_categorias(self):
-        cursor.execute("SELECT * FROM categorias ORDER BY nome")
-        categorias = cursor.fetchall()
-        return categorias
-
-    def get_times(self):
-        cursor.execute("SELECT * FROM times ORDER BY nome")
-        times = cursor.fetchall()
-        return times
-
-    def salvar_piloto(self):
-        nome = self.entry_nome.get().strip()
-        categoria_nome = self.categoria_var.get()
-        time_nome = self.time_var.get()
-
-        if not nome or not categoria_nome:
-            messagebox.showerror("Erro", "Todos os campos obrigatórios devem ser preenchidos.")
-            return
-
-        try:
-            cursor.execute("SELECT id FROM categorias WHERE nome = ?", (categoria_nome,))
-            categoria = cursor.fetchone()
-            if not categoria:
-                messagebox.showerror("Erro", "Categoria inválida.")
-                return
-            categoria_id = categoria[0]
-
-            cursor.execute("SELECT id FROM pilotos WHERE nome = ?", (nome,))
-            piloto = cursor.fetchone()
-            if piloto:
-                piloto_id = piloto[0]
-            else:
-                cursor.execute("INSERT INTO pilotos (nome) VALUES (?)", (nome,))
-                piloto_id = cursor.lastrowid
-
-            cursor.execute("INSERT INTO pilotos_categorias (piloto_id, categoria_id) VALUES (?, ?)",
-                           (piloto_id, categoria_id))
-
-            # Se um time foi selecionado, associá-lo ao piloto
-            if time_nome:
-                cursor.execute("SELECT id FROM times WHERE nome = ?", (time_nome,))
-                time = cursor.fetchone()
-                if time:
-                    time_id = time[0]
-                    # Verificar se o piloto já tem time
-                    cursor.execute("SELECT * FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-                    piloto_time_existente = cursor.fetchone()
-
-                    if piloto_time_existente:
-                        # Atualizar time existente
-                        cursor.execute("UPDATE pilotos_times SET time_id = ? WHERE piloto_id = ?",
-                                       (time_id, piloto_id))
-                    else:
-                        # Associar o novo time
-                        cursor.execute("INSERT INTO pilotos_times (piloto_id, time_id) VALUES (?, ?)",
-                                       (piloto_id, time_id))
-            # Se nenhum time for selecionado, garantir que não haja associação
-            else:
-                # Se nenhum time for selecionado e o piloto já tem time, remover o time
-                cursor.execute("DELETE FROM pilotos_times WHERE piloto_id = ?", (piloto_id,))
-
-            conn.commit()
-            messagebox.showinfo("Sucesso", "Piloto cadastrado com sucesso!")
-            self.destroy()
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erro", "Piloto já está associado a esta categoria.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao salvar piloto: {e}")
-
-
-# Exemplo de como integrar as frames em uma janela principal
-class App(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        self.title("Sistema de Gestão de Pilotos e Categorias")
-        self.geometry("800x600")
-
-        # Criar abas para Categorias e Pilotos
-        self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(expand=True, fill="both")
-
-        self.tabview.add("Categorias")
-        self.tabview.add("Pilotos")
-
-        self.categorias_frame = CadastroCategoriasFrame(self.tabview.tab("Categorias"))
-        self.pilotos_frame = CadastroPilotosFrame(self.tabview.tab("Pilotos"))
-
-
-if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+            conn.rollback()
+            QMessageBox.critical(self, "Erro", f"Um erro inesperado ocorreu ao unificar pilotos: {e}")
