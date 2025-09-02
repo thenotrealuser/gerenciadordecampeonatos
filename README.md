@@ -11,5 +11,6 @@ Não apague o arquivo .db gerado pelo aplicativo, fazer isto fará perder todos 
 
 Alguns bugs podem estar presentes, quando eu estiver disposto posso corrigir ou faça isso você mesmo fazendo um FORK do projeto ou me mandando o .py após testar!
 
-![image](https://github.com/user-attachments/assets/506da39f-61a2-4951-8fe9-4419767a928a)
+![image](<img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/bd82df85-63ec-47b4-9e73-b88b170855b7" />
+)
 
