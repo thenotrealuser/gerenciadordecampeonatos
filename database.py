@@ -3,7 +3,39 @@ import sqlite3
 conn = sqlite3.connect('database.db')
 cursor = conn.cursor()
 
+
+def adicionar_coluna_se_nao_existir(tabela, coluna, tipo):
+    """Verifica e adiciona uma coluna a uma tabela, se ela não existir."""
+    cursor.execute(f"PRAGMA table_info({tabela})")
+    colunas_existentes = [info[1] for info in cursor.fetchall()]
+    if coluna not in colunas_existentes:
+        print(f"Adicionando coluna '{coluna}' à tabela '{tabela}'...")
+        cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+        conn.commit()
+
+
 def setup_database():
+    # Tabela de Configurações do Campeonato
+    cursor.execute('''CREATE TABLE IF NOT EXISTS campeonato_config (
+                        id INTEGER PRIMARY KEY DEFAULT 1,
+                        cobra_inscricao BOOLEAN DEFAULT 0
+                    )''')
+    cursor.execute("INSERT OR IGNORE INTO campeonato_config (id) VALUES (1)")
+
+    # Tabela de Pagamentos
+    cursor.execute('''CREATE TABLE IF NOT EXISTS pagamentos (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        piloto_id INTEGER NOT NULL,
+                        tipo TEXT NOT NULL, -- 'INSCRICAO' ou 'ETAPA'
+                        etapa_id INTEGER, -- NULL se for inscrição
+                        status TEXT DEFAULT 'Pendente', -- 'Pendente', 'Pago', 'Prometeu Pagar'
+                        comprovante_path TEXT,
+                        comentarios TEXT, -- <<< NOVA COLUNA
+                        FOREIGN KEY(piloto_id) REFERENCES pilotos(id) ON DELETE CASCADE,
+                        FOREIGN KEY(etapa_id) REFERENCES etapas(id) ON DELETE CASCADE,
+                        UNIQUE(piloto_id, tipo, etapa_id)
+                    )''')
+
     # Tabela de Categorias
     cursor.execute('''CREATE TABLE IF NOT EXISTS categorias (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,13 +88,12 @@ def setup_database():
                         pontos INTEGER NOT NULL
                     )''')
 
-    # Tabela de Pontos Extras (COM A COLUNA ID CORRIGIDA)
+    # Tabela de Pontos Extras
     cursor.execute('''CREATE TABLE IF NOT EXISTS sistema_pontuacao_extras (
                         id INTEGER PRIMARY KEY DEFAULT 1,
                         pole_position INTEGER DEFAULT 0,
                         melhor_volta INTEGER DEFAULT 0
                     )''')
-    # Garante que a linha de configuração sempre exista
     cursor.execute("INSERT OR IGNORE INTO sistema_pontuacao_extras (id) VALUES (1)")
 
     # Tabela de Histórico de Sorteios
@@ -90,7 +121,11 @@ def setup_database():
                         FOREIGN KEY(time_id) REFERENCES times(id) ON DELETE CASCADE
                     )''')
 
+    # Adiciona a coluna de comentários se ela ainda não existir no BD do usuário
+    adicionar_coluna_se_nao_existir('pagamentos', 'comentarios', 'TEXT')
+
     conn.commit()
+
 
 # Executa a configuração ao iniciar
 setup_database()

@@ -16,11 +16,10 @@ from sorteio_karts import SorteioKartsWidget
 from importar_pilotos import ImportarPilotosWidget
 from sistema_pontuacao import SistemaPontuacaoWidget
 from historico_sorteios import HistoricoSorteiosWidget
+# A LINHA "from auth import LoginDialog" FOI REMOVIDA
 # ---------------------------
 
-from database import cursor, conn, setup_database
-
-setup_database()
+from database import conn
 
 
 class App(QMainWindow):
@@ -28,26 +27,18 @@ class App(QMainWindow):
         super().__init__()
         self.setWindowTitle("Sistema de Gerenciamento de Campeonato de Karts by :::Kimi Morgam:::")
         self.setMinimumSize(1280, 720)
-        self.showMaximized()
 
-        # --- TEMA UNIFICADO CINZA ESCURO ---
+        # --- TEMA ESTÁVEL CINZA ESCURO ---
         self.setStyleSheet("""
-            /* Fundo principal e texto padrão */
-            QMainWindow, QDialog, QWidget { 
-                background-color: #333333; /* Cinza Escuro Unificado */
-                color: #F0F0F0; /* Texto claro */
+            QWidget {
+                background-color: #333333;
+                color: #F0F0F0;
                 font-size: 14px;
                 border: none;
             }
-
-            /* Título do Menu */
-            #menuTitle {
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
+            QMainWindow, QDialog {
+                background-color: #333333;
             }
-
-            /* Botões */
             QPushButton {
                 background-color: #0078D7;
                 color: white;
@@ -58,59 +49,40 @@ class App(QMainWindow):
             QPushButton:hover {
                 background-color: #005A9E;
             }
-
-            /* Botão de Reset */
             #resetButton {
                 background-color: #D32F2F;
             }
             #resetButton:hover {
                 background-color: #B71C1C;
             }
-
-            /* Campos de Entrada */
-            QLineEdit, QComboBox, QTextEdit, QDateEdit, QListWidget, QGroupBox {
-                background-color: #444444; /* Cinza um pouco mais claro para destaque */
+            QLineEdit, QComboBox, QTextEdit, QDateEdit, QListWidget, QTableWidget, QGroupBox {
+                background-color: #444444;
                 border: 1px solid #555555;
                 border-radius: 4px;
                 padding: 6px;
             }
-
-            /* Tabelas */
-            QTableWidget {
-                background-color: #444444;
-                border: 1px solid #555555;
-                alternate-background-color: #3A3A3A;
-            }
             QHeaderView::section {
-                background-color: #555555; /* Cabeçalho cinza médio */
+                background-color: #555555;
                 padding: 6px;
                 font-weight: bold;
             }
             QTableWidget::item:selected {
                 background-color: #0078D7;
             }
-
-            /* Divisor */
             QSplitter::handle {
                 background-color: #555555;
-            }
-            QSplitter::handle:hover {
-                background-color: #0078D7;
             }
         """)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.setCentralWidget(splitter)
 
-        # --- Menu Esquerdo (Layout Corrigido) ---
+        # Menu Esquerdo
         menu_widget = QWidget()
-        menu_widget.setObjectName("leftMenu")
         menu_layout = QVBoxLayout(menu_widget)
         menu_layout.setContentsMargins(10, 10, 10, 10)
-
         title_label = QLabel("MENU PRINCIPAL")
-        title_label.setObjectName("menuTitle")
-        title_label.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         menu_layout.addWidget(title_label)
 
@@ -130,38 +102,35 @@ class App(QMainWindow):
             ("Sorteio de Karts", self.show_sorteio_karts),
             ("Importar Pilotos", self.show_importar_pilotos),
             ("Sistema de Pontuação", self.show_sistema_pontuacao),
+            ("Sistema de Pagamentos", self.show_sistema_pagamentos),
             ("Histórico de Sorteios", self.show_historico_sorteios),
             ("Resetar Campeonato", self.resetar_campeonato)
         ]
 
         for text, command in buttons:
             btn = QPushButton(text)
-            if text == "Resetar Campeonato":
-                btn.setObjectName("resetButton")
+            if text == "Resetar Campeonato": btn.setObjectName("resetButton")
             btn.clicked.connect(command)
             menu_scroll_layout.addWidget(btn)
 
         menu_scroll.setWidget(menu_scroll_widget)
         menu_layout.addWidget(menu_scroll)
-        # A linha "addStretch" foi removida daqui para o menu preencher o espaço
         splitter.addWidget(menu_widget)
 
-        # --- Conteúdo Direito ---
+        # Conteúdo Direito
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
         content_scroll = QScrollArea()
         content_scroll.setWidgetResizable(True)
         content_scroll.setWidget(self.content_widget)
         splitter.addWidget(content_scroll)
-
         splitter.setSizes([250, 800])
         self.show_cadastro_categorias()
 
     def clear_content(self):
         for i in reversed(range(self.content_layout.count())):
             widget = self.content_layout.itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
+            if widget: widget.deleteLater()
 
     def show_widget(self, widget_class):
         self.clear_content()
@@ -195,12 +164,19 @@ class App(QMainWindow):
     def show_sistema_pontuacao(self):
         self.show_widget(SistemaPontuacaoWidget)
 
+    def show_sistema_pagamentos(self):
+        from sistema_pagamentos import SistemaPagamentosWidget; self.show_widget(SistemaPagamentosWidget)
+
     def show_historico_sorteios(self):
         self.show_widget(HistoricoSorteiosWidget)
 
     def resetar_campeonato(self):
         dialog = ResetarCampeonatoDialog(self)
         dialog.exec()
+
+    def closeEvent(self, event):
+        conn.close()
+        event.accept()
 
 
 class ResetarCampeonatoDialog(QDialog):
@@ -209,29 +185,24 @@ class ResetarCampeonatoDialog(QDialog):
         self.setWindowTitle("Resetar Campeonato")
         self.setFixedSize(400, 250)
         layout = QVBoxLayout(self)
-
         label = QLabel("Tem certeza que deseja resetar o campeonato?")
         label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         layout.addWidget(label)
-
         btn_confirmar = QPushButton("Confirmar")
         btn_confirmar.setObjectName("resetButton")
         btn_confirmar.clicked.connect(self.resetar)
         layout.addWidget(btn_confirmar)
-
         btn_cancelar = QPushButton("Cancelar")
         btn_cancelar.clicked.connect(self.reject)
         layout.addWidget(btn_cancelar)
 
     def resetar(self):
+        from database import cursor
         try:
-            tabelas = [
-                "resultados_etapas", "pilotos_categorias", "pilotos_times",
-                "historico_sorteios", "etapas", "pilotos", "categorias", "times",
-                "sistema_pontuacao", "sistema_pontuacao_extras"
-            ]
-            for tabela in tabelas:
-                cursor.execute(f"DELETE FROM {tabela}")
+            tabelas = ["pagamentos", "campeonato_config", "resultados_etapas", "pilotos_categorias", "pilotos_times",
+                       "historico_sorteios", "etapas", "pilotos", "categorias", "times", "sistema_pontuacao",
+                       "sistema_pontuacao_extras"]
+            for tabela in tabelas: cursor.execute(f"DELETE FROM {tabela}")
             cursor.execute("DELETE FROM sqlite_sequence")
             conn.commit()
             QMessageBox.information(self, "Sucesso", "O campeonato foi resetado com sucesso.")
@@ -241,6 +212,7 @@ class ResetarCampeonatoDialog(QDialog):
             self.reject()
 
 
+# ***** BLOCO DE INICIALIZAÇÃO ATUALIZADO (SEM LOGIN) *****
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = App()

@@ -1,84 +1,78 @@
-import sqlite3
 import sys
-from tkinter import messagebox, Tk, Entry, Button
-import customtkinter as ctk
 import requests
+from PyQt6.QtWidgets import (
+    QApplication, QDialog, QVBoxLayout, QLabel, QLineEdit,
+    QMessageBox, QDialogButtonBox
+)
+from PyQt6.QtCore import Qt
 
 
 def verificar_acesso(login_usuario):
-    # URL para o documento do Google Docs
+    """Verifica o acesso consultando um documento online."""
     url = 'https://docs.google.com/document/d/1D_Jr8SJhW2Z0mcMlzjvYB8OO7KjWfOaL-PQb92stbwY/export?format=txt'
-
     try:
-        # Fazer a solicitação GET para obter o conteúdo do documento como texto
-        response = requests.get(url)
-        response.raise_for_status()  # Levanta um erro se houver problemas na requisição
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
 
-        # Processar o conteúdo do documento em memória
         conteudo = response.text.splitlines()
-
-        # Analisar as linhas do arquivo para encontrar o login e status
         logins_autorizados = {}
 
         for linha in conteudo:
-            # Cada linha deve estar no formato: "login: <login>, status: <status>"
             if "login:" in linha and "status:" in linha:
-                # Separar login e status
                 partes = linha.split(',')
                 login_part = partes[0].split(":")[1].strip()
                 status_part = partes[1].split(":")[1].strip()
                 logins_autorizados[login_part] = status_part
 
-        # Verificar se o login do usuário está na lista e se o status é 'liberado'
-        if login_usuario in logins_autorizados and logins_autorizados[login_usuario] == "liberado":
-            return True  # Permitir o acesso
+        if login_usuario in logins_autorizados and logins_autorizados[login_part] == "liberado":
+            return True, "Acesso liberado."
         else:
-            messagebox.showerror("Acesso Negado", "O acesso ao programa foi bloqueado. Entre em contato com o suporte.")
-            return False  # Bloquear o acesso
+            return False, "Acesso negado. Verifique seu login ou contate o suporte."
+
     except requests.RequestException as e:
-        # Tratar erros de conexão
-        messagebox.showerror("Erro de Conexão", f"Não foi possível verificar o acesso online: {e}")
-        return False
+        return False, f"Não foi possível verificar o acesso online: {e}"
 
 
-def tentar_login():
-    login_usuario = entry_login.get().strip()
-    if verificar_acesso(login_usuario):
-        messagebox.showinfo("Acesso Liberado", "Acesso liberado. Carregando o programa...")
-        root.destroy()  # Fecha a janela de login
-        iniciar_aplicativo()  # Chama a função que inicializa o aplicativo principal
-    else:
-        # Acesso negado
-        entry_login.delete(0, 'end')
+class LoginDialog(QDialog):
+    """Janela de login criada com PyQt6."""
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Login do Sistema")
+        self.setFixedSize(300, 150)
 
-def iniciar_aplicativo():
-    from main import App  # Agora só importa o App quando necessário, para evitar importação circular
-    app = App()
-    app.mainloop()
+        layout = QVBoxLayout(self)
 
+        layout.addWidget(QLabel("Digite o Login:"))
 
-def iniciar_login():
-    global root, entry_login
-    root = Tk()
-    root.title("Login do Sistema")
-    root.geometry("300x200")
+        self.login_input = QLineEdit()
+        self.login_input.returnPressed.connect(self.tentar_login)
+        layout.addWidget(self.login_input)
 
-    # Label para o campo de login
-    label_login = ctk.CTkLabel(root, text="Digite o Login:")
-    label_login.pack(pady=10)
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
 
-    # Entry para o login
-    entry_login = Entry(root)
-    entry_login.pack(pady=10)
+        button_box = QDialogButtonBox()
+        btn_entrar = button_box.addButton("Entrar", QDialogButtonBox.ButtonRole.ActionRole)
+        btn_entrar.clicked.connect(self.tentar_login)
+        layout.addWidget(button_box)
 
-    # Botão de login
-    btn_login = Button(root, text="Entrar", command=tentar_login)
-    btn_login.pack(pady=10)
+        self.login_input.setFocus()
 
-    root.mainloop()
+    def tentar_login(self):
+        login = self.login_input.text().strip()
+        if not login:
+            self.status_label.setText("Por favor, digite um login.")
+            return
 
+        self.status_label.setText("Verificando...")
+        QApplication.processEvents()
 
-def ao_fechar_login():
-    root.destroy()
-    sys.exit()  # Encerra o programa completamente
+        sucesso, mensagem = verificar_acesso(login)
+
+        if sucesso:
+            self.accept()
+        else:
+            self.status_label.setText("")
+            QMessageBox.critical(self, "Acesso Negado", mensagem)
+            self.login_input.clear()

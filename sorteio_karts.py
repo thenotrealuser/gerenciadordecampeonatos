@@ -193,9 +193,19 @@ class SorteioKartsWidget(QWidget):
         self.kart_grid = KartGridWidget()
         left_layout.addWidget(self.kart_grid)
 
+        # Layout para os botões de ação do sorteio
+        action_buttons_layout = QHBoxLayout()
+
+        # ***** NOVO BOTÃO DE SELEÇÃO ALEATÓRIA *****
+        btn_selecao_aleatoria = QPushButton("Seleção Aleatória de Karts")
+        btn_selecao_aleatoria.clicked.connect(self.selecionar_karts_aleatoriamente)
+        action_buttons_layout.addWidget(btn_selecao_aleatoria)
+
         btn_sortear = QPushButton("Sortear Karts")
         btn_sortear.clicked.connect(self.sortear_karts)
-        left_layout.addWidget(btn_sortear)
+        action_buttons_layout.addWidget(btn_sortear)
+
+        left_layout.addLayout(action_buttons_layout)
 
         main_layout.addLayout(left_layout, 3)
 
@@ -228,6 +238,29 @@ class SorteioKartsWidget(QWidget):
 
         main_layout.addWidget(right_frame, 1)
 
+    # ***** NOVA FUNÇÃO PARA O BOTÃO *****
+    def selecionar_karts_aleatoriamente(self):
+        """Conta os pilotos ativos e seleciona a mesma quantidade de karts aleatoriamente."""
+        num_pilotos_ativos = sum(self.pilotos_disponiveis.values())
+
+        if num_pilotos_ativos == 0:
+            QMessageBox.information(self, "Aviso", "Não há pilotos ativos na lista para selecionar os karts.")
+            return
+
+        todos_os_karts = list(range(1, 101))
+
+        # Garante que não vai tentar sortear mais karts do que existem
+        if num_pilotos_ativos > len(todos_os_karts):
+            QMessageBox.warning(self, "Erro",
+                                f"A quantidade de pilotos ({num_pilotos_ativos}) é maior que a quantidade de karts disponíveis (100).")
+            return
+
+        karts_selecionados = random.sample(todos_os_karts, num_pilotos_ativos)
+
+        # Atualiza o conjunto de karts disponíveis na grade e força a repintura
+        self.kart_grid.disponiveis = set(karts_selecionados)
+        self.kart_grid.update()
+
     def carregar_categorias(self):
         self.combo_categoria.clear()
         self.combo_categoria.addItem("-- Selecione --")
@@ -236,7 +269,6 @@ class SorteioKartsWidget(QWidget):
             self.combo_categoria.addItem(cat_nome, userData=cat_id)
 
     def atualizar_pilotos(self):
-        # Limpa layout de pilotos
         for i in reversed(range(self.pilotos_layout.count())):
             self.pilotos_layout.itemAt(i).widget().setParent(None)
         self.pilotos_disponiveis.clear()
@@ -260,7 +292,6 @@ class SorteioKartsWidget(QWidget):
             nome_piloto = row[0]
             self.pilotos_disponiveis[nome_piloto] = True
 
-            # Cria widget para cada piloto
             piloto_widget = QWidget()
             piloto_layout = QHBoxLayout(piloto_widget)
             piloto_layout.setContentsMargins(0, 0, 0, 0)
