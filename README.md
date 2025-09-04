@@ -2,10 +2,6 @@ Sistema de gerenciamento de campeonatos de kart.
 Completo, fácil, auto-intuitivo.
 Basta abrir, ler, clicar nos botões e cadastrar as informações.
 
-Temos um grupo onde forneço suporte, porém não é em tempo real, apenas quando posso.
-
-https://chat.whatsapp.com/LbSxR59gA4Q8gFDadCPzBh <----- grupo no whatsapp.
-
 Para baixar compilado, basta clicar em latest, baixar o main.exe e executar.
 Não apague o arquivo .db gerado pelo aplicativo, fazer isto fará perder todos dados cadastrados a menos claro, que você queira zerar as informações.
 
